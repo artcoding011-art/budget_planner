@@ -542,7 +542,7 @@
       <div class="card">
         <div class="list-header">
           <div class="list-title">이번 달 변동 지출</div>
-          <button class="btn btn-ghost btn-sm" onclick="navigate('variable')">전체 보기</button>
+          <button class="btn btn-ghost btn-sm" id="btnToggleDashVarView" onclick="toggleDashVarView()">개별 항목 보기</button>
         </div>
         <div class="entry-list" id="dashRecentList"></div>
       </div>
@@ -594,7 +594,10 @@
           <div class="page-title">변동 지출</div>
           <div class="page-subtitle" id="varSubtitle"></div>
         </div>
-        <button class="btn btn-primary" id="btnAddVariable">＋ 지출 추가</button>
+        <div style="display:flex;gap:8px;">
+          <button class="btn btn-ghost" id="btnAddCategory">＋ 카테고리 추가</button>
+          <button class="btn btn-primary" id="btnAddVariable">＋ 지출 추가</button>
+        </div>
       </div>
       
       <div class="card" style="background:var(--bg-active); border-color:var(--accent-light); padding:16px 20px;">
@@ -774,25 +777,46 @@
   </div>
 </div>
 
+<!-- Modal: Category -->
+<div class="modal-overlay" id="categoryModal">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title">카테고리 추가</div>
+      <button class="btn-icon" onclick="closeModal('categoryModal')">✕</button>
+    </div>
+    <div class="form-group"><label class="form-label">카테고리 이름</label><input type="text" id="catNameInput" class="form-input" placeholder="예: 데이트, 구독료" /></div>
+    <div class="form-group" style="margin-top:12px;">
+      <label class="form-label">카테고리 색상</label>
+      <div class="color-picker" id="catColorPicker"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('categoryModal')">취소</button>
+      <button class="btn btn-primary" onclick="saveCustomCategory()">저장</button>
+    </div>
+  </div>
+</div>
+
 <div id="toast"></div>
 
 <script>
 'use strict';
 
 /* ─────────── 상수 ─────────── */
-const CATEGORIES = [
-  { id:'food',      name:'식비',       color:'#e67e22' },
-  { id:'transport', name:'교통',       color:'#2980b9' },
-  { id:'health',    name:'의료/건강',  color:'#27ae60' },
-  { id:'education', name:'교육',       color:'#8e44ad' },
-  { id:'housing',   name:'주거',       color:'#c0392b' },
-  { id:'leisure',   name:'여가',       color:'#16a085' },
-  { id:'clothing',  name:'의류',       color:'#d35400' },
+const DEFAULT_CATEGORIES = [
   { id:'family',    name:'생활비',     color:'#e91e63' },
   { id:'allowance', name:'개인용돈',   color:'#9c27b0' },
-  { id:'other',     name:'기타',       color:'#7f8c8d' },
 ];
-const CAT_MAP = Object.fromEntries(CATEGORIES.map(c=>[c.id,c]));
+
+function getUserCategories(uid) {
+  if (!uid || uid === '__overview__') return [...DEFAULT_CATEGORIES, { id:'other', name:'기타', color:'#7f8c8d' }];
+  const set = loadUD(uid).settings || {};
+  const custom = set.customCategories || [];
+  return [...DEFAULT_CATEGORIES, ...custom, { id:'other', name:'기타', color:'#7f8c8d' }];
+}
+
+function getUserCatMap(uid) {
+  return Object.fromEntries(getUserCategories(uid).map(c=>[c.id, c]));
+}
 
 const USER_COLORS = ['#0078d4','#107c10','#c42b1c','#8e44ad','#e67e22','#16a085','#d35400','#2c3e50','#e91e63','#00796b'];
 
@@ -805,6 +829,12 @@ let editingId   = null;
 let catFilter   = null;
 let selColor    = USER_COLORS[0];
 let fixedSelColor = USER_COLORS[0];
+let dashVarViewMode = 'category';
+
+function toggleDashVarView() {
+  dashVarViewMode = dashVarViewMode === 'category' ? 'list' : 'category';
+  renderDashboard();
+}
 
 function renderFixedColorPicker() {
   const el = document.getElementById('fixedColorPicker');
@@ -924,8 +954,8 @@ function calcOverview() {
 /* ─────────── 포매팅 ─────────── */
 function fmt(n)         { return '₩'+(Math.round(n||0)).toLocaleString('ko-KR'); }
 function mlStr(y,m)     { return `${y}년 ${m}월`; }
-function catColor(id)   { return (CAT_MAP[id]||CAT_MAP['other']).color; }
-function catName(id)    { return (CAT_MAP[id]||CAT_MAP['other']).name; }
+function catColor(id)   { return (getUserCatMap(activeUid)[id] || {color:'#7f8c8d'}).color; }
+function catName(id)    { return (getUserCatMap(activeUid)[id] || {name:'기타'}).name; }
 function todayStr()     { const d=new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; }
 
 /* ─────────── 탭 바 렌더 ─────────── */
@@ -1118,8 +1148,23 @@ function renderDashboard() {
   if (s.sav < 0) { badge.className='progress-badge bad';  badge.textContent='⚠ 초과 지출'; }
   else { badge.className='progress-badge good'; badge.textContent='정상'; }
 
-  const recent = [...s.variable].sort((a,b)=>(b.date||'').localeCompare(a.date||'')).slice(0,5);
-  renderEntryList('dashRecentList', recent, false, true);
+  document.getElementById('btnToggleDashVarView').textContent = dashVarViewMode === 'category' ? '개별 항목 보기' : '카테고리별 보기';
+
+  if (dashVarViewMode === 'category') {
+    const catTotals = {};
+    s.variable.forEach(v => {
+      const cid = v.category || 'other';
+      catTotals[cid] = (catTotals[cid]||0) + v.amount;
+    });
+    const grouped = Object.entries(catTotals).sort((a,b)=>b[1]-a[1]).map(([cid, amount]) => ({
+      id: cid, name: catName(cid), category: cid, amount: amount
+    }));
+    renderEntryList('dashRecentList', grouped, false, false, false);
+  } else {
+    const recent = [...s.variable].sort((a,b)=>(b.date||'').localeCompare(a.date||'')).slice(0,5);
+    renderEntryList('dashRecentList', recent, false, true);
+  }
+  
   renderEntryList('dashFixedList',  s.fixed, false, false, true);
 }
 
@@ -1413,7 +1458,8 @@ function deleteIncome(id) {
 
 /* ─────────── Fixed CRUD ─────────── */
 function populateCatSelect(selId, selectedId) {
-  document.getElementById(selId).innerHTML=CATEGORIES.map(c=>`<option value="${c.id}"${c.id===(selectedId||'other')?' selected':''}>${c.name}</option>`).join('');
+  const cats = getUserCategories(activeUid);
+  document.getElementById(selId).innerHTML=cats.map(c=>`<option value="${c.id}"${c.id===(selectedId||'family')?' selected':''}>${c.name}</option>`).join('');
 }
 function openAddFixed() {
   editingId=null;
@@ -1452,13 +1498,40 @@ function deleteFixed_(id) {
   showToast('삭제되었습니다'); renderAll();
 }
 
+/* ─────────── Category CRUD ─────────── */
+let catSelColor = USER_COLORS[0];
+function renderCatColorPicker() {
+  const el = document.getElementById('catColorPicker');
+  if(el) el.innerHTML = USER_COLORS.map(c=>`<div class="color-swatch${c===catSelColor?' selected':''}" style="background:${c}" onclick="selectCatColor('${c}')"></div>`).join('');
+}
+function selectCatColor(c) { catSelColor=c; renderCatColorPicker(); }
+
+function openAddCategory() {
+  document.getElementById('catNameInput').value = '';
+  catSelColor = USER_COLORS[0];
+  renderCatColorPicker();
+  openModal('categoryModal');
+}
+
+function saveCustomCategory() {
+  const name = document.getElementById('catNameInput').value.trim();
+  if(!name) return showToast('카테고리 이름을 입력하세요.');
+  const set = getSettings(activeUid);
+  const custom = set.customCategories || [];
+  custom.push({ id: genId(), name, color: catSelColor });
+  saveSettings_(activeUid, { customCategories: custom });
+  showToast('카테고리가 추가되었습니다.');
+  closeModal('categoryModal');
+  renderAll();
+}
+
 /* ─────────── Variable CRUD ─────────── */
 function openAddVariable() {
   editingId=null;
   document.getElementById('varMTitle').textContent='지출 추가';
   ['varNameInput','varAmountInput','varMemoInput'].forEach(id=>document.getElementById(id).value='');
   document.getElementById('varDateInput').value=todayStr();
-  populateCatSelect('varCatInput','food');
+  populateCatSelect('varCatInput','family');
   openModal('variableModal');
 }
 function editVarEntry(id) {
@@ -1548,6 +1621,7 @@ document.getElementById('btnExportCSV').addEventListener('click',exportCSV);
 document.getElementById('btnAddIncome').addEventListener('click',openAddIncome);
 document.getElementById('btnAddFixed').addEventListener('click',openAddFixed);
 document.getElementById('btnAddVariable').addEventListener('click',openAddVariable);
+document.getElementById('btnAddCategory').addEventListener('click',openAddCategory);
 document.querySelectorAll('.nav-item[data-view]').forEach(btn=>btn.addEventListener('click',()=>navigate(btn.dataset.view)));
 
 // Enter 키
