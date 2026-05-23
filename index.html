@@ -971,9 +971,12 @@ function calcSummary(uid) {
   
   const livSpent = (md.variable||[]).filter(v=>v.category==='family').reduce((s,v)=>s+(v.amount||0),0);
   const allSpent = (md.variable||[]).filter(v=>v.category==='allowance').reduce((s,v)=>s+(v.amount||0),0);
+  const otherSpent = (md.variable||[]).filter(v=>v.category!=='family' && v.category!=='allowance').reduce((s,v)=>s+(v.amount||0),0);
   
   const livGoal = set.livingGoal||0;
   const allGoal = set.allowanceGoal||0;
+  
+  const expectedSav = inc - fix - livGoal - allGoal - otherSpent;
   
   const livBal = livGoal - livSpent;
   const allBal = allGoal - allSpent;
@@ -981,17 +984,19 @@ function calcSummary(uid) {
   const livPct = livGoal>0 ? Math.min(100, Math.round(livSpent/livGoal*100)) : 0;
   const allPct = allGoal>0 ? Math.min(100, Math.round(allSpent/allGoal*100)) : 0;
 
-  return { inc, fix, vr, sav, livGoal, allGoal, livSpent, allSpent, livBal, allBal, livPct, allPct, income:md.income||[], variable:md.variable||[], fixed:fx };
+  return { inc, fix, vr, sav, livGoal, allGoal, livSpent, allSpent, otherSpent, expectedSav, livBal, allBal, livPct, allPct, income:md.income||[], variable:md.variable||[], fixed:fx };
 }
 
 function calcOverview() {
   const users = getUsers();
-  let totInc=0, totFix=0, totVr=0, totLivGoal=0, totLivSpent=0, totAllGoal=0, totAllSpent=0;
+  let totInc=0, totFix=0, totVr=0, totLivGoal=0, totLivSpent=0, totAllGoal=0, totAllSpent=0, totOtherSpent=0, totExpectedSav=0;
   const perUser = users.map(u => {
     const s = calcSummary(u.id);
     totInc += s.inc; totFix += s.fix; totVr += s.vr;
     totLivGoal += s.livGoal; totLivSpent += s.livSpent;
     totAllGoal += s.allGoal; totAllSpent += s.allSpent;
+    totOtherSpent += s.otherSpent;
+    totExpectedSav += s.expectedSav;
     return { user:u, s };
   });
   const totLivBal = totLivGoal - totLivSpent;
@@ -999,7 +1004,7 @@ function calcOverview() {
   const totLivPct = totLivGoal>0 ? Math.min(100, Math.round(totLivSpent/totLivGoal*100)) : 0;
   const totAllPct = totAllGoal>0 ? Math.min(100, Math.round(totAllSpent/totAllGoal*100)) : 0;
 
-  return { totInc, totFix, totVr, totSav:totInc-totFix-totVr, totLivGoal, totLivSpent, totLivBal, totLivPct, totAllGoal, totAllSpent, totAllBal, totAllPct, perUser };
+  return { totInc, totFix, totVr, totSav:totInc-totFix-totVr, totLivGoal, totLivSpent, totLivBal, totLivPct, totAllGoal, totAllSpent, totAllBal, totAllPct, totOtherSpent, totExpectedSav, perUser };
 }
 
 /* ─────────── 포매팅 ─────────── */
@@ -1109,9 +1114,7 @@ function renderOverview() {
   document.getElementById('ov-living').textContent  = fmt(ov.totLivBal);
   document.getElementById('ov-allowance').textContent  = fmt(ov.totAllBal);
 
-  const totExpectedSav = ov.perUser.reduce((sum, u) => {
-    return sum + (u.s.inc - u.s.fix - (u.s.livGoal + u.s.allGoal));
-  }, 0);
+  const totExpectedSav = ov.totExpectedSav;
 
   const ovSavHeaderEl = document.getElementById('ovSavingsHeader');
   const ovSavAmountEl = document.getElementById('ov-savings-val');
@@ -1205,7 +1208,7 @@ function renderDashboard() {
   document.getElementById('sc-living').textContent  = fmt(s.livBal);
   document.getElementById('sc-allowance').textContent  = fmt(s.allBal);
 
-  const expectedSav = s.inc - s.fix - (s.livGoal + s.allGoal);
+  const expectedSav = s.expectedSav;
   const savHeaderEl = document.getElementById('dashSavingsHeader');
   const savAmountEl = document.getElementById('sc-savings-val');
   const savSubEl = document.getElementById('sc-savings-sub-val');
