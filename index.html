@@ -804,7 +804,22 @@ const DEFAULT_CATEGORIES = [
 ];
 
 function getUserCategories(uid) {
-  if (!uid || uid === '__overview__') return [...DEFAULT_CATEGORIES, { id:'other', name:'기타', color:'#7f8c8d' }];
+  if (!uid || uid === '__overview__') {
+    const users = getUsers();
+    const allCustom = [];
+    const seenIds = new Set();
+    users.forEach(u => {
+      const set = loadUD(u.uid).settings || {};
+      const custom = set.customCategories || [];
+      custom.forEach(c => {
+        if (!seenIds.has(c.id)) {
+          seenIds.add(c.id);
+          allCustom.push(c);
+        }
+      });
+    });
+    return [...DEFAULT_CATEGORIES, ...allCustom, { id:'other', name:'기타', color:'#7f8c8d' }];
+  }
   const set = loadUD(uid).settings || {};
   const custom = set.customCategories || [];
   return [...DEFAULT_CATEGORIES, ...custom, { id:'other', name:'기타', color:'#7f8c8d' }];
