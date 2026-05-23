@@ -1,0 +1,1488 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>가계부 — 다중 사용자 월별 수입·지출 관리</title>
+  <meta name="description" content="여러 사용자의 월별 수입, 고정지출, 변동지출 통합 관리" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Pretendard:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg-base:       #f3f3f3;
+      --bg-card:       rgba(255,255,255,0.82);
+      --bg-card-solid: #ffffff;
+      --bg-sidebar:    rgba(243,243,243,0.75);
+      --bg-header:     rgba(255,255,255,0.80);
+      --bg-tabbar:     rgba(248,248,248,0.92);
+      --bg-input:      rgba(255,255,255,0.9);
+      --bg-hover:      rgba(0,0,0,0.04);
+      --bg-active:     rgba(0,120,212,0.12);
+      --bg-modal:      rgba(0,0,0,0.35);
+      --border:        rgba(0,0,0,0.08);
+      --border-focus:  #0078d4;
+      --divider:       rgba(0,0,0,0.06);
+      --text-primary:  #1a1a1a;
+      --text-secondary:#6e6e6e;
+      --text-muted:    #a0a0a0;
+      --accent:        #0078d4;
+      --accent-hover:  #006cbd;
+      --accent-light:  #cce4f7;
+      --success:       #107c10;
+      --success-light: #dff6dd;
+      --danger:        #c42b1c;
+      --danger-light:  #fde7e9;
+      --warning:       #9d5d00;
+      --warning-light: #fff4ce;
+      --radius-sm: 6px; --radius-md: 10px; --radius-lg: 14px; --radius-xl: 20px;
+      --shadow-sm: 0 1px 3px rgba(0,0,0,0.08);
+      --shadow-md: 0 4px 16px rgba(0,0,0,0.10);
+      --shadow-lg: 0 8px 32px rgba(0,0,0,0.14);
+      --sidebar-w: 220px; --header-h: 52px; --tabbar-h: 44px;
+      --transition: 0.18s ease;
+    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html { font-size: 14px; }
+    body {
+      font-family: 'Pretendard', -apple-system, 'Segoe UI', sans-serif;
+      background: var(--bg-base); color: var(--text-primary);
+      line-height: 1.5; height: 100vh; overflow: hidden;
+    }
+
+    /* ── App Shell ── */
+    #app {
+      display: grid;
+      grid-template-rows: var(--header-h) var(--tabbar-h) 1fr;
+      grid-template-columns: var(--sidebar-w) 1fr;
+      height: 100vh;
+    }
+    #header  { grid-column: 1/-1; grid-row: 1; }
+    #tabbar  { grid-column: 1/-1; grid-row: 2; }
+    #sidebar { grid-row: 3; grid-column: 1; }
+    #main    { grid-row: 3; grid-column: 2; }
+    #app.overview-mode #sidebar { display: none; }
+    #app.overview-mode #main    { grid-column: 1/-1; }
+
+    /* ── Header ── */
+    #header {
+      display: flex; align-items: center; gap: 12px; padding: 0 20px;
+      background: var(--bg-header); border-bottom: 1px solid var(--border);
+      backdrop-filter: blur(20px); z-index: 100;
+    }
+    .header-logo {
+      display: flex; align-items: center; gap: 8px;
+      font-size: 15px; font-weight: 600; color: var(--text-primary);
+    }
+    .logo-icon {
+      width: 28px; height: 28px;
+      background: linear-gradient(135deg,#0078d4,#50a5f1);
+      border-radius: var(--radius-sm);
+      display: flex; align-items: center; justify-content: center;
+      color: #fff; font-size: 15px;
+    }
+    .header-spacer { flex: 1; }
+    .month-nav {
+      display: flex; align-items: center; gap: 6px;
+      background: var(--bg-card); border: 1px solid var(--border);
+      border-radius: var(--radius-md); padding: 4px 10px; box-shadow: var(--shadow-sm);
+    }
+    .month-nav button {
+      background: none; border: none; cursor: pointer; color: var(--text-secondary);
+      width: 24px; height: 24px; border-radius: var(--radius-sm);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 16px; transition: background var(--transition);
+    }
+    .month-nav button:hover { background: var(--bg-hover); }
+    #monthLabel { font-size: 13px; font-weight: 600; min-width: 80px; text-align: center; }
+    .icon-btn {
+      width: 32px; height: 32px; background: none; border: none; cursor: pointer;
+      border-radius: var(--radius-sm); display: flex; align-items: center; justify-content: center;
+      font-size: 16px; color: var(--text-secondary);
+      transition: background var(--transition), color var(--transition);
+    }
+    .icon-btn:hover { background: var(--bg-hover); color: var(--text-primary); }
+
+    /* ── Tab Bar ── */
+    #tabbar {
+      display: flex; align-items: stretch;
+      background: var(--bg-tabbar); border-bottom: 1px solid var(--border);
+      backdrop-filter: blur(16px); padding: 0 8px; gap: 2px;
+      overflow-x: auto; scrollbar-width: none;
+    }
+    #tabbar::-webkit-scrollbar { display: none; }
+    .tab-item {
+      display: flex; align-items: center; gap: 7px; padding: 0 14px;
+      border: none; background: none; cursor: pointer;
+      font-family: inherit; font-size: 13px; font-weight: 500;
+      color: var(--text-secondary); white-space: nowrap;
+      border-bottom: 2px solid transparent;
+      border-radius: var(--radius-sm) var(--radius-sm) 0 0;
+      transition: color var(--transition), background var(--transition), border-color var(--transition);
+    }
+    .tab-item:hover { background: var(--bg-hover); color: var(--text-primary); }
+    .tab-item.active {
+      color: var(--accent); border-bottom-color: var(--accent);
+      background: rgba(255,255,255,0.7); font-weight: 600;
+    }
+    .tab-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+    .tab-close-btn {
+      width: 16px; height: 16px; border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 10px; color: var(--text-muted);
+      background: none; border: none; cursor: pointer; margin-left: 2px;
+      transition: background var(--transition), color var(--transition);
+    }
+    .tab-close-btn:hover { background: var(--danger-light); color: var(--danger); }
+    .tab-sep { width: 1px; background: var(--border); margin: 9px 4px; flex-shrink: 0; }
+    .tab-add {
+      display: flex; align-items: center; gap: 5px; padding: 0 12px;
+      border: none; background: none; cursor: pointer;
+      font-family: inherit; font-size: 12px; font-weight: 500; color: var(--text-muted);
+      border-radius: var(--radius-sm) var(--radius-sm) 0 0; white-space: nowrap;
+      transition: color var(--transition), background var(--transition);
+    }
+    .tab-add:hover { color: var(--accent); background: var(--bg-hover); }
+
+    /* ── Sidebar ── */
+    #sidebar {
+      background: var(--bg-sidebar); border-right: 1px solid var(--border);
+      backdrop-filter: blur(20px); padding: 12px 8px;
+      display: flex; flex-direction: column; gap: 2px; overflow-y: auto;
+    }
+    .nav-item {
+      display: flex; align-items: center; gap: 10px; padding: 8px 12px;
+      border-radius: var(--radius-md); cursor: pointer; color: var(--text-secondary);
+      font-size: 13px; font-weight: 500;
+      transition: background var(--transition), color var(--transition);
+      border: none; background: none; width: 100%; text-align: left;
+    }
+    .nav-item:hover { background: var(--bg-hover); color: var(--text-primary); }
+    .nav-item.active { background: var(--bg-active); color: var(--accent); font-weight: 600; }
+    .nav-item .nav-icon { font-size: 16px; width: 20px; text-align: center; }
+    .nav-section-label {
+      font-size: 10px; font-weight: 600; color: var(--text-muted);
+      letter-spacing: 0.08em; text-transform: uppercase; padding: 8px 12px 4px;
+    }
+    .nav-divider { height: 1px; background: var(--divider); margin: 6px 8px; }
+
+    /* ── Main ── */
+    #main { overflow-y: auto; padding: 24px; display: flex; flex-direction: column; gap: 20px; }
+    .view { display: none; flex-direction: column; gap: 20px; }
+    .view.active { display: flex; }
+
+    /* ── Page Header ── */
+    .page-header { display: flex; align-items: flex-start; justify-content: space-between; }
+    .page-title { font-size: 20px; font-weight: 700; }
+    .page-subtitle { font-size: 13px; color: var(--text-secondary); margin-top: 2px; }
+
+    /* ── Card ── */
+    .card {
+      background: var(--bg-card); border: 1px solid var(--border);
+      border-radius: var(--radius-lg); padding: 20px; box-shadow: var(--shadow-sm);
+      backdrop-filter: blur(12px);
+    }
+    .card-title {
+      font-size: 12px; font-weight: 600; color: var(--text-muted);
+      letter-spacing: 0.06em; text-transform: uppercase; margin-bottom: 12px;
+    }
+
+    /* ── Summary Grid ── */
+    .summary-grid { display: grid; grid-template-columns: repeat(5,1fr); gap: 14px; }
+    @media (max-width: 1200px) { .summary-grid { grid-template-columns: repeat(3,1fr); } }
+    @media (max-width: 800px)  { .summary-grid { grid-template-columns: repeat(2,1fr); } }
+    .summary-card {
+      background: var(--bg-card-solid); border: 1px solid var(--border);
+      border-radius: var(--radius-lg); padding: 18px 20px;
+      box-shadow: var(--shadow-sm); position: relative; overflow: hidden;
+      transition: box-shadow var(--transition), transform var(--transition);
+    }
+    .summary-card:hover { box-shadow: var(--shadow-md); transform: translateY(-1px); }
+    .summary-card::before { content:''; position:absolute; top:0; left:0; right:0; height:3px; }
+    .summary-card.income::before   { background: linear-gradient(90deg,#0078d4,#50a5f1); }
+    .summary-card.fixed::before    { background: linear-gradient(90deg,#c42b1c,#e77066); }
+    .summary-card.variable::before { background: linear-gradient(90deg,#9d5d00,#f4a944); }
+    .summary-card.living::before   { background: linear-gradient(90deg,#e91e63,#f06292); }
+    .summary-card.allowance::before{ background: linear-gradient(90deg,#9c27b0,#ba68c8); }
+    .sc-label { font-size: 11px; font-weight: 600; color: var(--text-muted); letter-spacing: 0.06em; text-transform: uppercase; }
+    .sc-icon  { position:absolute; right:16px; top:14px; font-size:22px; opacity:0.18; }
+    .sc-amount { font-size: 22px; font-weight: 700; margin: 6px 0 4px; letter-spacing:-0.02em; }
+    .sc-amount.income   { color: var(--accent); }
+    .sc-amount.fixed    { color: var(--danger); }
+    .sc-amount.variable { color: var(--warning); }
+    .sc-amount.living   { color: #e91e63; }
+    .sc-amount.allowance{ color: #9c27b0; }
+    .sc-sub { font-size: 11px; color: var(--text-muted); }
+    .savings-bar-wrap { margin-top: 10px; }
+    .savings-bar-label { display:flex; justify-content:space-between; font-size:11px; color:var(--text-muted); margin-bottom:4px; }
+    .savings-bar { height:6px; background:var(--divider); border-radius:99px; overflow:hidden; }
+    .savings-bar-fill { height:100%; border-radius:99px; transition:width 0.5s ease; }
+
+    /* ── Buttons ── */
+    .btn {
+      display: inline-flex; align-items: center; gap: 6px; padding: 7px 16px;
+      border-radius: var(--radius-md); border: none; cursor: pointer;
+      font-family: inherit; font-size: 13px; font-weight: 500; white-space: nowrap;
+      transition: background var(--transition), transform var(--transition);
+    }
+    .btn:active { transform: scale(0.97); }
+    .btn-primary { background: var(--accent); color: #fff; box-shadow: 0 2px 6px rgba(0,120,212,0.28); }
+    .btn-primary:hover { background: var(--accent-hover); }
+    .btn-ghost { background: var(--bg-hover); color: var(--text-primary); }
+    .btn-ghost:hover { background: rgba(0,0,0,0.09); }
+    .btn-danger { background: var(--danger); color: #fff; }
+    .btn-danger:hover { background: #a52318; }
+    .btn-sm { padding: 4px 10px; font-size: 12px; }
+    .btn-icon {
+      padding: 6px; border-radius: var(--radius-sm); background: none; border: none;
+      cursor: pointer; color: var(--text-muted);
+      transition: background var(--transition), color var(--transition);
+    }
+    .btn-icon:hover { background: var(--bg-hover); color: var(--text-primary); }
+    .btn-icon.danger:hover { color: var(--danger); background: var(--danger-light); }
+
+    /* ── Entry List ── */
+    .list-header { display:flex; align-items:center; gap:8px; margin-bottom:12px; }
+    .list-title { font-size: 15px; font-weight: 600; flex: 1; }
+    .entry-list { display: flex; flex-direction: column; gap: 6px; }
+    .entry-item {
+      display: flex; align-items: center; gap: 12px; padding: 12px 14px;
+      background: var(--bg-card-solid); border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      transition: box-shadow var(--transition), border-color var(--transition);
+    }
+    .entry-item:hover { box-shadow: var(--shadow-sm); border-color: rgba(0,0,0,0.13); }
+    .entry-cat-dot { width:10px; height:10px; border-radius:50%; flex-shrink:0; }
+    .entry-name { flex:1; font-size:13px; font-weight:500; }
+    .entry-sub  { font-size:11px; color:var(--text-muted); }
+    .entry-amount { font-size:14px; font-weight:600; min-width:110px; text-align:right; }
+    .entry-amount.positive { color: var(--accent); }
+    .entry-amount.negative { color: var(--danger); }
+    .entry-actions { display:flex; gap:2px; }
+    .empty-state { text-align:center; padding:40px 20px; color:var(--text-muted); }
+    .empty-state .empty-icon { font-size:36px; margin-bottom:8px; }
+    .empty-state p { font-size:13px; }
+
+    /* Badges */
+    .badge { display:inline-flex; align-items:center; padding:2px 8px; border-radius:99px; font-size:10px; font-weight:600; text-transform:uppercase; letter-spacing:0.05em; }
+    .badge-fixed  { background:var(--danger-light); color:var(--danger); }
+    .badge-income { background:var(--accent-light); color:var(--accent); }
+    .date-chip { font-size:11px; color:var(--text-muted); background:var(--bg-hover); padding:2px 8px; border-radius:99px; }
+
+    /* ── Forms ── */
+    .form-group { display:flex; flex-direction:column; gap:5px; }
+    .form-label { font-size:12px; font-weight:600; color:var(--text-secondary); }
+    .form-input, .form-select {
+      background: var(--bg-input); border: 1px solid var(--border);
+      border-radius: var(--radius-md); padding: 8px 12px;
+      font-family: inherit; font-size: 13px; color: var(--text-primary);
+      outline: none; transition: border-color var(--transition), box-shadow var(--transition); width: 100%;
+    }
+    .form-input:focus, .form-select:focus { border-color:var(--border-focus); box-shadow:0 0 0 3px rgba(0,120,212,0.15); }
+    .form-row { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+
+    /* Color Picker */
+    .color-picker { display:flex; gap:8px; flex-wrap:wrap; }
+    .color-swatch {
+      width:28px; height:28px; border-radius:50%; cursor:pointer;
+      border: 3px solid transparent;
+      transition: border-color var(--transition), transform var(--transition);
+    }
+    .color-swatch.selected { border-color: var(--text-primary); transform:scale(1.15); }
+
+    /* ── Modal ── */
+    .modal-overlay {
+      position:fixed; inset:0; background:var(--bg-modal); backdrop-filter:blur(4px);
+      display:flex; align-items:center; justify-content:center; z-index:1000;
+      opacity:0; pointer-events:none; transition:opacity 0.2s ease;
+    }
+    .modal-overlay.open { opacity:1; pointer-events:all; }
+    .modal {
+      background:var(--bg-card-solid); border:1px solid var(--border);
+      border-radius:var(--radius-xl); padding:28px; width:440px; max-width:95vw;
+      box-shadow:var(--shadow-lg); transform:scale(0.95) translateY(8px);
+      transition:transform 0.2s ease; display:flex; flex-direction:column; gap:18px;
+    }
+    .modal-overlay.open .modal { transform:scale(1) translateY(0); }
+    .modal-header { display:flex; align-items:center; justify-content:space-between; }
+    .modal-title  { font-size:16px; font-weight:700; }
+    .modal-footer { display:flex; justify-content:flex-end; gap:8px; padding-top:4px; }
+
+    /* ── Charts ── */
+    .chart-grid { display:grid; grid-template-columns:1fr 1fr; gap:16px; }
+    .chart-wrap { display:flex; align-items:center; gap:20px; }
+    canvas { flex-shrink:0; }
+    .chart-legend { display:flex; flex-direction:column; gap:7px; flex:1; }
+    .legend-item { display:flex; align-items:center; gap:8px; font-size:12px; }
+    .legend-dot  { width:10px; height:10px; border-radius:50%; flex-shrink:0; }
+    .legend-name { flex:1; color:var(--text-secondary); }
+    .legend-val  { font-weight:600; }
+
+    /* ── Overview ── */
+    .ov-user-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(210px,1fr)); gap:14px; }
+    .ov-user-card {
+      background:var(--bg-card-solid); border:1px solid var(--border);
+      border-radius:var(--radius-lg); padding:18px; box-shadow:var(--shadow-sm);
+      position:relative; overflow:hidden; cursor:pointer;
+      transition:box-shadow var(--transition), transform var(--transition);
+    }
+    .ov-user-card:hover { box-shadow:var(--shadow-md); transform:translateY(-2px); }
+    .ov-user-card-top { border-left:4px solid; padding-left:12px; margin-bottom:14px; }
+    .ov-user-name { font-size:15px; font-weight:700; }
+    .ov-user-month { font-size:11px; color:var(--text-muted); margin-top:1px; }
+    .ov-user-row { display:flex; justify-content:space-between; font-size:12px; padding:3px 0; }
+    .ov-user-row .lbl { color:var(--text-muted); }
+    .ov-user-row .val { font-weight:600; }
+    .ov-user-row .pos { color:var(--accent); }
+    .ov-user-row .neg { color:var(--danger); }
+    .ov-user-row .sav { color:var(--success); }
+    .ov-divider { height:1px; background:var(--divider); margin:8px 0; }
+
+    /* Compare Chart */
+    .cmp-chart { display:flex; flex-direction:column; gap:12px; margin-top:8px; }
+    .cmp-row { display:flex; align-items:center; gap:12px; }
+    .cmp-label { width:72px; font-size:12px; font-weight:600; text-align:right; flex-shrink:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .cmp-track { flex:1; height:18px; background:var(--divider); border-radius:99px; overflow:hidden; }
+    .cmp-fill  { height:100%; display:flex; transition:width 0.5s ease; }
+    .cmp-val   { width:90px; font-size:11px; font-weight:600; color:var(--text-muted); text-align:right; flex-shrink:0; }
+
+    /* ── Settings ── */
+    .settings-section { display:flex; flex-direction:column; gap:16px; }
+    .settings-row {
+      display:flex; align-items:center; justify-content:space-between;
+      padding:14px 16px; background:var(--bg-card-solid); border:1px solid var(--border); border-radius:var(--radius-md);
+    }
+    .settings-row-label { font-size:13px; font-weight:500; }
+    .settings-row-sub   { font-size:11px; color:var(--text-muted); margin-top:1px; }
+    .settings-row-ctrl  { display:flex; align-items:center; gap:8px; }
+
+    /* Progress Badge */
+    .progress-badge { display:inline-flex; align-items:center; gap:4px; font-size:11px; font-weight:600; padding:2px 8px; border-radius:99px; }
+    .progress-badge.good { background:var(--success-light); color:var(--success); }
+    .progress-badge.warn { background:var(--warning-light); color:var(--warning); }
+    .progress-badge.bad  { background:var(--danger-light);  color:var(--danger); }
+
+    /* ── Toast ── */
+    #toast {
+      position:fixed; bottom:24px; right:24px; background:#1a1a1a; color:#fff;
+      padding:10px 18px; border-radius:var(--radius-md); font-size:13px; font-weight:500;
+      box-shadow:var(--shadow-lg); z-index:9999; opacity:0; pointer-events:none;
+      transform:translateY(8px); transition:opacity 0.2s, transform 0.2s;
+    }
+    #toast.show { opacity:1; pointer-events:all; transform:translateY(0); }
+
+    /* Scrollbar */
+    ::-webkit-scrollbar { width:6px; }
+    ::-webkit-scrollbar-track { background:transparent; }
+    ::-webkit-scrollbar-thumb { background:rgba(0,0,0,0.15); border-radius:99px; }
+    ::-webkit-scrollbar-thumb:hover { background:rgba(0,0,0,0.25); }
+  </style>
+</head>
+<body>
+<div id="app">
+
+  <!-- ── Header ── -->
+  <header id="header">
+    <div class="header-logo">
+      <div class="logo-icon">💰</div>
+      가계부
+    </div>
+    <div class="month-nav" style="margin-left:16px;">
+      <button id="btnPrevMonth">&#8249;</button>
+      <span id="monthLabel"></span>
+      <button id="btnNextMonth">&#8250;</button>
+    </div>
+    <div class="header-spacer"></div>
+    <button class="icon-btn" id="btnExportCSV" title="CSV 내보내기">📥</button>
+  </header>
+
+  <!-- ── Tab Bar ── -->
+  <div id="tabbar">
+    <button class="tab-item" id="tab-__overview__" data-uid="__overview__">
+      📊 통합 가계부
+    </button>
+    <div class="tab-sep"></div>
+    <div id="userTabsWrap" style="display:flex;align-items:stretch;gap:2px;"></div>
+    <button class="tab-add" id="btnAddUser">＋ 사용자 추가</button>
+  </div>
+
+  <!-- ── Sidebar ── -->
+  <nav id="sidebar">
+    <div class="nav-section-label">메뉴</div>
+    <button class="nav-item active" data-view="dashboard" id="nav-dashboard"><span class="nav-icon">📊</span>대시보드</button>
+    <button class="nav-item" data-view="income"   id="nav-income"  ><span class="nav-icon">💳</span>수입 관리</button>
+    <button class="nav-item" data-view="fixed"    id="nav-fixed"   ><span class="nav-icon">📌</span>고정 지출</button>
+    <button class="nav-item" data-view="variable" id="nav-variable"><span class="nav-icon">🧾</span>변동 지출</button>
+    <div class="nav-divider"></div>
+    <div class="nav-section-label">분석</div>
+    <button class="nav-item" data-view="stats"    id="nav-stats"   ><span class="nav-icon">📈</span>월별 통계</button>
+    <div class="nav-divider"></div>
+    <div class="nav-section-label">기타</div>
+    <button class="nav-item" data-view="settings" id="nav-settings"><span class="nav-icon">⚙️</span>설정</button>
+  </nav>
+
+  <!-- ── Main ── -->
+  <main id="main">
+
+    <!-- ▶ Overview -->
+    <section class="view" id="view-overview">
+      <div class="page-header">
+        <div>
+          <div class="page-title">📊 통합 가계부</div>
+          <div class="page-subtitle" id="ovSubtitle">모든 사용자의 이번 달 통합 현황</div>
+        </div>
+      </div>
+      <div class="summary-grid">
+        <div class="summary-card income">
+          <span class="sc-icon">💳</span>
+          <div class="sc-label">합산 수입</div>
+          <div class="sc-amount income" id="ov-income">₩0</div>
+          <div class="sc-sub" id="ov-income-sub"></div>
+        </div>
+        <div class="summary-card fixed">
+          <span class="sc-icon">📌</span>
+          <div class="sc-label">합산 고정지출</div>
+          <div class="sc-amount fixed" id="ov-fixed">₩0</div>
+          <div class="sc-sub" id="ov-fixed-sub"></div>
+        </div>
+        <div class="summary-card variable">
+          <span class="sc-icon">🧾</span>
+          <div class="sc-label">합산 변동지출</div>
+          <div class="sc-amount variable" id="ov-variable">₩0</div>
+          <div class="sc-sub" id="ov-variable-sub"></div>
+        </div>
+        <div class="summary-card living">
+          <span class="sc-icon">🛒</span>
+          <div class="sc-label">합산 생활비 잔액</div>
+          <div class="sc-amount living" id="ov-living">₩0</div>
+          <div class="savings-bar-wrap">
+            <div class="savings-bar-label"><span>사용률</span><span id="ov-living-pct">0%</span></div>
+            <div class="savings-bar"><div class="savings-bar-fill" id="ov-living-bar" style="width:0%;"></div></div>
+          </div>
+        </div>
+        <div class="summary-card allowance">
+          <span class="sc-icon">☕</span>
+          <div class="sc-label">합산 개인용돈 잔액</div>
+          <div class="sc-amount allowance" id="ov-allowance">₩0</div>
+          <div class="savings-bar-wrap">
+            <div class="savings-bar-label"><span>사용률</span><span id="ov-allowance-pct">0%</span></div>
+            <div class="savings-bar"><div class="savings-bar-fill" id="ov-allowance-bar" style="width:0%;"></div></div>
+          </div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="list-header"><div class="list-title">사용자별 현황</div></div>
+        <div class="ov-user-grid" id="ovUserGrid"></div>
+      </div>
+      <div class="chart-grid">
+        <div class="card">
+          <div class="card-title">사용자별 수지 비교</div>
+          <div class="cmp-chart" id="ovCmpChart"></div>
+          <div style="display:flex;gap:14px;margin-top:12px;font-size:11px;">
+            <span style="display:flex;align-items:center;gap:4px;"><span style="width:10px;height:10px;border-radius:2px;background:#c42b1c;display:inline-block;"></span>지출</span>
+            <span style="display:flex;align-items:center;gap:4px;"><span style="width:10px;height:10px;border-radius:2px;background:#107c10;display:inline-block;"></span>잔액</span>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-title">전체 카테고리별 지출</div>
+          <div class="chart-wrap" style="margin-top:8px;">
+            <canvas id="ovPieChart" width="150" height="150"></canvas>
+            <div class="chart-legend" id="ovPieLegend"></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ▶ Dashboard -->
+    <section class="view" id="view-dashboard">
+      <div class="page-header">
+        <div>
+          <div class="page-title" id="dashTitle">가계부</div>
+          <div class="page-subtitle" id="dashSub"></div>
+        </div>
+        <span class="progress-badge good" id="savingsBadge"></span>
+      </div>
+      <div class="summary-grid">
+        <div class="summary-card income">
+          <span class="sc-icon">💳</span>
+          <div class="sc-label">총 수입</div>
+          <div class="sc-amount income" id="sc-income">₩0</div>
+          <div class="sc-sub" id="sc-income-sub">수입 0건</div>
+        </div>
+        <div class="summary-card fixed">
+          <span class="sc-icon">📌</span>
+          <div class="sc-label">고정 지출</div>
+          <div class="sc-amount fixed" id="sc-fixed">₩0</div>
+          <div class="sc-sub" id="sc-fixed-sub">항목 0건</div>
+        </div>
+        <div class="summary-card variable">
+          <span class="sc-icon">🧾</span>
+          <div class="sc-label">변동 지출</div>
+          <div class="sc-amount variable" id="sc-variable">₩0</div>
+          <div class="sc-sub" id="sc-variable-sub">지출 0건</div>
+        </div>
+        <div class="summary-card living">
+          <span class="sc-icon">🛒</span>
+          <div class="sc-label">생활비 잔액</div>
+          <div class="sc-amount living" id="sc-living">₩0</div>
+          <div class="savings-bar-wrap">
+            <div class="savings-bar-label"><span>사용률</span><span id="sc-living-pct">0%</span></div>
+            <div class="savings-bar"><div class="savings-bar-fill" id="sc-living-bar" style="width:0%;"></div></div>
+          </div>
+        </div>
+        <div class="summary-card allowance">
+          <span class="sc-icon">☕</span>
+          <div class="sc-label">개인용돈 잔액</div>
+          <div class="sc-amount allowance" id="sc-allowance">₩0</div>
+          <div class="savings-bar-wrap">
+            <div class="savings-bar-label"><span>사용률</span><span id="sc-allowance-pct">0%</span></div>
+            <div class="savings-bar"><div class="savings-bar-fill" id="sc-allowance-bar" style="width:0%;"></div></div>
+          </div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="list-header">
+          <div class="list-title">이번 달 변동 지출</div>
+          <button class="btn btn-ghost btn-sm" onclick="navigate('variable')">전체 보기</button>
+        </div>
+        <div class="entry-list" id="dashRecentList"></div>
+      </div>
+      <div class="card">
+        <div class="list-header">
+          <div class="list-title">이번 달 고정 지출</div>
+          <button class="btn btn-ghost btn-sm" onclick="navigate('fixed')">관리</button>
+        </div>
+        <div class="entry-list" id="dashFixedList"></div>
+      </div>
+    </section>
+
+    <!-- ▶ Income -->
+    <section class="view" id="view-income">
+      <div class="page-header">
+        <div>
+          <div class="page-title">수입 관리</div>
+          <div class="page-subtitle" id="incomeSubtitle"></div>
+        </div>
+        <button class="btn btn-primary" id="btnAddIncome">＋ 수입 추가</button>
+      </div>
+      <div class="card"><div class="entry-list" id="incomeList"></div></div>
+      <div class="card">
+        <div class="card-title">이번 달 수입 합계</div>
+        <div style="font-size:26px;font-weight:700;color:var(--accent)" id="incomeTotalDisp">₩0</div>
+      </div>
+    </section>
+
+    <!-- ▶ Fixed -->
+    <section class="view" id="view-fixed">
+      <div class="page-header">
+        <div>
+          <div class="page-title">고정 지출</div>
+          <div class="page-subtitle">매달 자동으로 반영되는 고정 비용</div>
+        </div>
+        <button class="btn btn-primary" id="btnAddFixed">＋ 항목 추가</button>
+      </div>
+      <div class="card"><div class="entry-list" id="fixedList"></div></div>
+      <div class="card">
+        <div class="card-title">월 고정지출 합계</div>
+        <div style="font-size:26px;font-weight:700;color:var(--danger)" id="fixedTotalDisp">₩0</div>
+      </div>
+    </section>
+
+    <!-- ▶ Variable -->
+    <section class="view" id="view-variable">
+      <div class="page-header">
+        <div>
+          <div class="page-title">변동 지출</div>
+          <div class="page-subtitle" id="varSubtitle"></div>
+        </div>
+        <button class="btn btn-primary" id="btnAddVariable">＋ 지출 추가</button>
+      </div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;" id="catFilterWrap"></div>
+      <div class="card"><div class="entry-list" id="variableList"></div></div>
+      <div class="card">
+        <div class="card-title">이번 달 변동지출 합계</div>
+        <div style="font-size:26px;font-weight:700;color:var(--warning)" id="varTotalDisp">₩0</div>
+      </div>
+    </section>
+
+    <!-- ▶ Stats -->
+    <section class="view" id="view-stats">
+      <div class="page-header">
+        <div>
+          <div class="page-title">월별 통계</div>
+          <div class="page-subtitle" id="statsSubtitle"></div>
+        </div>
+      </div>
+      <div class="chart-grid">
+        <div class="card">
+          <div class="card-title">카테고리별 지출 비율</div>
+          <div class="chart-wrap" style="margin-top:8px;">
+            <canvas id="pieChart" width="150" height="150"></canvas>
+            <div class="chart-legend" id="pieLegend"></div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-title">이번 달 수지 분석</div>
+          <canvas id="donutChart" width="150" height="150" style="margin-top:8px;"></canvas>
+          <div class="chart-legend" id="donutLegend" style="margin-top:12px;"></div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-title">최근 6개월 추이</div>
+        <div id="barChartWrap" style="display:flex;gap:10px;align-items:flex-end;height:160px;padding-top:10px;margin-top:8px;"></div>
+        <div style="display:flex;gap:14px;margin-top:12px;font-size:11px;">
+          <span style="display:flex;align-items:center;gap:4px;"><span style="width:10px;height:10px;border-radius:2px;background:#0078d4;display:inline-block;"></span>수입</span>
+          <span style="display:flex;align-items:center;gap:4px;"><span style="width:10px;height:10px;border-radius:2px;background:#c42b1c;display:inline-block;"></span>지출</span>
+          <span style="display:flex;align-items:center;gap:4px;"><span style="width:10px;height:10px;border-radius:2px;background:#107c10;display:inline-block;"></span>잔액</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- ▶ Settings -->
+    <section class="view" id="view-settings">
+      <div class="page-header">
+        <div>
+          <div class="page-title">설정</div>
+          <div class="page-subtitle" id="settingsSubtitle"></div>
+        </div>
+      </div>
+      <div class="card settings-section">
+        <div class="settings-row">
+          <div>
+            <div class="settings-row-label">생활비 목표</div>
+            <div class="settings-row-sub">생활비 카테고리의 월별 목표 금액입니다</div>
+          </div>
+          <div class="settings-row-ctrl">
+            <input type="number" id="settingLivingGoal" class="form-input" style="width:140px;text-align:right;" placeholder="0" step="10000" />
+            <span style="font-size:13px;color:var(--text-muted);">원</span>
+          </div>
+        </div>
+        <div class="settings-row">
+          <div>
+            <div class="settings-row-label">개인용돈 목표</div>
+            <div class="settings-row-sub">개인용돈 카테고리의 월별 목표 금액입니다</div>
+          </div>
+          <div class="settings-row-ctrl">
+            <input type="number" id="settingAllowanceGoal" class="form-input" style="width:140px;text-align:right;" placeholder="0" step="10000" />
+            <span style="font-size:13px;color:var(--text-muted);">원</span>
+          </div>
+        </div>
+        <div class="settings-row" style="justify-content: flex-end; padding-top: 0; border: none; background: transparent;">
+            <button class="btn btn-primary" onclick="saveGoals()">목표 저장</button>
+        </div>
+        <div class="settings-row">
+          <div>
+            <div class="settings-row-label">사용자 데이터 초기화</div>
+            <div class="settings-row-sub">이 사용자의 모든 수입·지출 데이터를 삭제합니다</div>
+          </div>
+          <div class="settings-row-ctrl">
+            <button class="btn btn-danger btn-sm" onclick="confirmReset()">초기화</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+  </main>
+</div>
+
+<!-- Modal: Add User -->
+<div class="modal-overlay" id="userModal">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title">사용자 추가</div>
+      <button class="btn-icon" onclick="closeModal('userModal')">✕</button>
+    </div>
+    <div class="form-group">
+      <label class="form-label">이름</label>
+      <input type="text" id="userNameInput" class="form-input" placeholder="이름을 입력하세요" maxlength="12" />
+    </div>
+    <div class="form-group">
+      <label class="form-label">색상 선택</label>
+      <div class="color-picker" id="colorPicker"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('userModal')">취소</button>
+      <button class="btn btn-primary" onclick="saveUser()">추가</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: Income -->
+<div class="modal-overlay" id="incomeModal">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title" id="incomeMTitle">수입 추가</div>
+      <button class="btn-icon" onclick="closeModal('incomeModal')">✕</button>
+    </div>
+    <div class="form-group"><label class="form-label">항목명</label><input type="text" id="incomeNameInput" class="form-input" placeholder="예: 월급, 부업 수입" /></div>
+    <div class="form-group"><label class="form-label">금액 (원)</label><input type="number" id="incomeAmountInput" class="form-input" placeholder="0" step="1000" /></div>
+    <div class="form-group"><label class="form-label">메모 (선택)</label><input type="text" id="incomeMemoInput" class="form-input" placeholder="메모를 입력하세요" /></div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('incomeModal')">취소</button>
+      <button class="btn btn-primary" onclick="saveIncome()">저장</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: Fixed -->
+<div class="modal-overlay" id="fixedModal">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title" id="fixedMTitle">고정지출 추가</div>
+      <button class="btn-icon" onclick="closeModal('fixedModal')">✕</button>
+    </div>
+    <div class="form-group"><label class="form-label">항목명</label><input type="text" id="fixedNameInput" class="form-input" placeholder="예: 월세, 통신비, 보험료" /></div>
+    <div class="form-row">
+      <div class="form-group"><label class="form-label">금액 (원)</label><input type="number" id="fixedAmountInput" class="form-input" placeholder="0" step="1000" /></div>
+      <div class="form-group"><label class="form-label">카테고리</label><select id="fixedCatInput" class="form-select"></select></div>
+    </div>
+    <div class="form-group"><label class="form-label">메모 (선택)</label><input type="text" id="fixedMemoInput" class="form-input" placeholder="메모를 입력하세요" /></div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('fixedModal')">취소</button>
+      <button class="btn btn-primary" onclick="saveFixed()">저장</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: Variable -->
+<div class="modal-overlay" id="variableModal">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title" id="varMTitle">지출 추가</div>
+      <button class="btn-icon" onclick="closeModal('variableModal')">✕</button>
+    </div>
+    <div class="form-group"><label class="form-label">항목명</label><input type="text" id="varNameInput" class="form-input" placeholder="예: 마트 장보기, 외식" /></div>
+    <div class="form-row">
+      <div class="form-group"><label class="form-label">금액 (원)</label><input type="number" id="varAmountInput" class="form-input" placeholder="0" step="1000" /></div>
+      <div class="form-group"><label class="form-label">카테고리</label><select id="varCatInput" class="form-select"></select></div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label class="form-label">날짜</label><input type="date" id="varDateInput" class="form-input" /></div>
+      <div class="form-group"><label class="form-label">메모 (선택)</label><input type="text" id="varMemoInput" class="form-input" placeholder="메모" /></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('variableModal')">취소</button>
+      <button class="btn btn-primary" onclick="saveVariable()">저장</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+'use strict';
+
+/* ─────────── 상수 ─────────── */
+const CATEGORIES = [
+  { id:'food',      name:'식비',       color:'#e67e22' },
+  { id:'transport', name:'교통',       color:'#2980b9' },
+  { id:'health',    name:'의료/건강',  color:'#27ae60' },
+  { id:'education', name:'교육',       color:'#8e44ad' },
+  { id:'housing',   name:'주거',       color:'#c0392b' },
+  { id:'leisure',   name:'여가',       color:'#16a085' },
+  { id:'clothing',  name:'의류',       color:'#d35400' },
+  { id:'family',    name:'생활비',     color:'#e91e63' },
+  { id:'allowance', name:'개인용돈',   color:'#9c27b0' },
+  { id:'other',     name:'기타',       color:'#7f8c8d' },
+];
+const CAT_MAP = Object.fromEntries(CATEGORIES.map(c=>[c.id,c]));
+
+const USER_COLORS = ['#0078d4','#107c10','#c42b1c','#8e44ad','#e67e22','#16a085','#d35400','#2c3e50','#e91e63','#00796b'];
+
+/* ─────────── 상태 ─────────── */
+let curYear  = new Date().getFullYear();
+let curMonth = new Date().getMonth() + 1;
+let activeUid   = '__overview__';
+let activeView  = 'overview';
+let editingId   = null;
+let catFilter   = null;
+let selColor    = USER_COLORS[0];
+
+/* ─────────── Storage ─────────── */
+const USERS_KEY = 'budgetApp_users';
+const dataKey   = uid => `budgetApp_data_${uid}`;
+
+function getUsers()        { try { return JSON.parse(localStorage.getItem(USERS_KEY)||'[]'); } catch { return []; } }
+function saveUsers(u)      { localStorage.setItem(USERS_KEY, JSON.stringify(u)); }
+function loadUD(uid)       { try { return JSON.parse(localStorage.getItem(dataKey(uid))||'{}'); } catch { return {}; } }
+function saveUD(uid, data) { localStorage.setItem(dataKey(uid), JSON.stringify(data)); }
+
+function monthKey() { return `${curYear}-${String(curMonth).padStart(2,'0')}`; }
+
+function getMonthData(uid)        { const d=loadUD(uid); return d[monthKey()]||{income:[],variable:[]}; }
+function saveMonthData(uid, md)   { const d=loadUD(uid); d[monthKey()]=md; saveUD(uid,d); }
+function getFixed(uid)            { return loadUD(uid).fixedExpenses||[]; }
+function saveFixed_(uid,list)     { const d=loadUD(uid); d.fixedExpenses=list; saveUD(uid,d); }
+function getSettings(uid)         { return loadUD(uid).settings||{livingGoal:0, allowanceGoal:0}; }
+function saveSettings_(uid,s)     { const d=loadUD(uid); d.settings={...getSettings(uid),...s}; saveUD(uid,d); }
+
+function genId() { return Date.now().toString(36)+Math.random().toString(36).slice(2); }
+
+/* ─────────── 집계 ─────────── */
+function calcSummary(uid) {
+  const md  = getMonthData(uid);
+  const fx  = getFixed(uid);
+  const set = getSettings(uid);
+  const inc = (md.income||[]).reduce((s,i)=>s+(i.amount||0),0);
+  const fix = fx.reduce((s,f)=>s+(f.amount||0),0);
+  const vr  = (md.variable||[]).reduce((s,v)=>s+(v.amount||0),0);
+  const sav = inc - fix - vr;
+  
+  const livSpent = (md.variable||[]).filter(v=>v.category==='family').reduce((s,v)=>s+(v.amount||0),0);
+  const allSpent = (md.variable||[]).filter(v=>v.category==='allowance').reduce((s,v)=>s+(v.amount||0),0);
+  
+  const livGoal = set.livingGoal||0;
+  const allGoal = set.allowanceGoal||0;
+  
+  const livBal = livGoal - livSpent;
+  const allBal = allGoal - allSpent;
+  
+  const livPct = livGoal>0 ? Math.min(100, Math.round(livSpent/livGoal*100)) : 0;
+  const allPct = allGoal>0 ? Math.min(100, Math.round(allSpent/allGoal*100)) : 0;
+
+  return { inc, fix, vr, sav, livGoal, allGoal, livSpent, allSpent, livBal, allBal, livPct, allPct, income:md.income||[], variable:md.variable||[], fixed:fx };
+}
+
+function calcOverview() {
+  const users = getUsers();
+  let totInc=0, totFix=0, totVr=0, totLivGoal=0, totLivSpent=0, totAllGoal=0, totAllSpent=0;
+  const perUser = users.map(u => {
+    const s = calcSummary(u.id);
+    totInc += s.inc; totFix += s.fix; totVr += s.vr;
+    totLivGoal += s.livGoal; totLivSpent += s.livSpent;
+    totAllGoal += s.allGoal; totAllSpent += s.allSpent;
+    return { user:u, s };
+  });
+  const totLivBal = totLivGoal - totLivSpent;
+  const totAllBal = totAllGoal - totAllSpent;
+  const totLivPct = totLivGoal>0 ? Math.min(100, Math.round(totLivSpent/totLivGoal*100)) : 0;
+  const totAllPct = totAllGoal>0 ? Math.min(100, Math.round(totAllSpent/totAllGoal*100)) : 0;
+
+  return { totInc, totFix, totVr, totSav:totInc-totFix-totVr, totLivGoal, totLivSpent, totLivBal, totLivPct, totAllGoal, totAllSpent, totAllBal, totAllPct, perUser };
+}
+
+/* ─────────── 포매팅 ─────────── */
+function fmt(n)         { return '₩'+(Math.round(n||0)).toLocaleString('ko-KR'); }
+function mlStr(y,m)     { return `${y}년 ${m}월`; }
+function catColor(id)   { return (CAT_MAP[id]||CAT_MAP['other']).color; }
+function catName(id)    { return (CAT_MAP[id]||CAT_MAP['other']).name; }
+function todayStr()     { const d=new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; }
+
+/* ─────────── 탭 바 렌더 ─────────── */
+function renderTabs() {
+  const users = getUsers();
+
+  const ovTab = document.getElementById('tab-__overview__');
+  ovTab.className = `tab-item${activeUid==='__overview__' ? ' active' : ''}`;
+
+  const wrap = document.getElementById('userTabsWrap');
+  wrap.innerHTML = users.map(u => `
+    <button class="tab-item${activeUid===u.id?' active':''}" data-uid="${u.id}" id="tab-${u.id}">
+      <span class="tab-dot" style="background:${u.color}"></span>
+      ${u.name}
+      <button class="tab-close-btn" onclick="event.stopPropagation();deleteUser('${u.id}')" title="${u.name} 삭제">✕</button>
+    </button>`).join('');
+
+  wrap.querySelectorAll('.tab-item[data-uid]').forEach(btn => {
+    btn.addEventListener('click', ()=>switchUser(btn.dataset.uid));
+  });
+
+  const app = document.getElementById('app');
+  app.classList.toggle('overview-mode', activeUid==='__overview__');
+}
+
+/* ─────────── 사용자 전환 ─────────── */
+function switchUser(uid) {
+  activeUid  = uid;
+  catFilter  = null;
+  renderTabs();
+  if (uid === '__overview__') {
+    showView('overview');
+  } else {
+    const nv = activeView === 'overview' ? 'dashboard' : activeView;
+    showView(nv);
+  }
+}
+
+/* ─────────── 뷰 전환 ─────────── */
+function showView(vname) {
+  activeView = vname;
+  document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  document.getElementById(`view-${vname}`)?.classList.add('active');
+  document.getElementById(`nav-${vname}`)?.classList.add('active');
+  renderView(vname);
+}
+
+function navigate(vname) { showView(vname); }
+
+function renderView(vname) {
+  if (vname==='overview')  renderOverview();
+  else if (vname==='dashboard') renderDashboard();
+  else if (vname==='income')    renderIncome();
+  else if (vname==='fixed')     renderFixed();
+  else if (vname==='variable')  renderVariable();
+  else if (vname==='stats')     renderStats();
+  else if (vname==='settings')  renderSettingsView();
+}
+
+function renderAll() {
+  renderTabs();
+  renderView(activeView);
+}
+
+/* ─────────── Overview ─────────── */
+function renderOverview() {
+  const users = getUsers();
+  document.getElementById('ovSubtitle').textContent = `${mlStr(curYear,curMonth)} · ${users.length}명 통합 현황`;
+
+  if (users.length === 0) {
+    ['ov-income','ov-fixed','ov-variable','ov-living','ov-allowance'].forEach(id=>document.getElementById(id).textContent='₩0');
+    ['ov-income-sub','ov-fixed-sub','ov-variable-sub'].forEach(id=>document.getElementById(id).textContent='');
+    document.getElementById('ov-living-pct').textContent='0%';
+    document.getElementById('ov-allowance-pct').textContent='0%';
+    document.getElementById('ov-living-bar').style.width='0%';
+    document.getElementById('ov-allowance-bar').style.width='0%';
+    document.getElementById('ovUserGrid').innerHTML=`
+      <div style="grid-column:1/-1;text-align:center;padding:40px 20px;color:var(--text-muted);">
+        <div style="font-size:48px;margin-bottom:12px;">👥</div>
+        <div style="font-size:15px;font-weight:600;margin-bottom:6px;">사용자가 없습니다</div>
+        <p style="font-size:13px;">상단 탭의 <b>＋ 사용자 추가</b>를 눌러 시작하세요</p>
+      </div>`;
+    document.getElementById('ovCmpChart').innerHTML='';
+    drawPie('ovPieChart',[]);
+    document.getElementById('ovPieLegend').innerHTML='';
+    return;
+  }
+
+  const ov = calcOverview();
+  document.getElementById('ov-income').textContent   = fmt(ov.totInc);
+  document.getElementById('ov-fixed').textContent    = fmt(ov.totFix);
+  document.getElementById('ov-variable').textContent = fmt(ov.totVr);
+  document.getElementById('ov-living').textContent  = fmt(ov.totLivBal);
+  document.getElementById('ov-allowance').textContent  = fmt(ov.totAllBal);
+
+  document.getElementById('ov-income-sub').textContent   = `${users.length}명 합산`;
+  document.getElementById('ov-fixed-sub').textContent    = `${users.length}명 합산`;
+  document.getElementById('ov-variable-sub').textContent = `${users.length}명 합산`;
+
+  document.getElementById('ov-living-pct').textContent  = `${ov.totLivPct}%`;
+  document.getElementById('ov-allowance-pct').textContent  = `${ov.totAllPct}%`;
+  document.getElementById('ov-living-bar').style.width  = `${ov.totLivPct}%`;
+  document.getElementById('ov-allowance-bar').style.width  = `${ov.totAllPct}%`;
+  
+  if (ov.totLivBal < 0) document.getElementById('ov-living-bar').style.background = 'var(--danger)';
+  else document.getElementById('ov-living-bar').style.background = 'linear-gradient(90deg,#e91e63,#f06292)';
+  
+  if (ov.totAllBal < 0) document.getElementById('ov-allowance-bar').style.background = 'var(--danger)';
+  else document.getElementById('ov-allowance-bar').style.background = 'linear-gradient(90deg,#9c27b0,#ba68c8)';
+
+  document.getElementById('ovUserGrid').innerHTML = ov.perUser.map(({user,s}) => `
+    <div class="ov-user-card" onclick="switchUser('${user.id}')">
+      <div class="ov-user-card-top" style="border-color:${user.color}">
+        <div class="ov-user-name" style="color:${user.color}">${user.name}</div>
+        <div class="ov-user-month">${mlStr(curYear,curMonth)}</div>
+      </div>
+      <div class="ov-user-row"><span class="lbl">💳 수입</span><span class="val pos">${fmt(s.inc)}</span></div>
+      <div class="ov-user-row"><span class="lbl">📌 고정지출</span><span class="val neg">${fmt(s.fix)}</span></div>
+      <div class="ov-user-row"><span class="lbl">🧾 변동지출</span><span class="val neg">${fmt(s.vr)}</span></div>
+      <div class="ov-divider"></div>
+      <div class="ov-user-row"><span class="lbl">🛒 생활비 잔액</span><span class="val ${s.livBal>=0?'pos':'neg'}">${fmt(s.livBal)}</span></div>
+      <div class="ov-user-row"><span class="lbl">☕ 개인용돈 잔액</span><span class="val ${s.allBal>=0?'pos':'neg'}">${fmt(s.allBal)}</span></div>
+    </div>`).join('');
+
+  const maxInc = Math.max(...ov.perUser.map(p=>p.s.inc), 1);
+  document.getElementById('ovCmpChart').innerHTML = ov.perUser.map(({user,s}) => {
+    const pctW   = (s.inc / maxInc * 100).toFixed(1);
+    const expFlex = s.inc > 0 ? (s.fix+s.vr)/s.inc*100 : 100;
+    const savFlex = Math.max(0, 100-expFlex);
+    return `
+      <div class="cmp-row">
+        <div class="cmp-label" style="color:${user.color}">${user.name}</div>
+        <div class="cmp-track">
+          <div class="cmp-fill" style="width:${pctW}%;">
+            <div style="flex:${expFlex};background:#c42b1c;min-height:1px;"></div>
+            <div style="flex:${savFlex};background:#107c10;min-height:1px;"></div>
+          </div>
+        </div>
+        <div class="cmp-val">${fmt(s.inc)}</div>
+      </div>`;
+  }).join('');
+
+  const catTotals = {};
+  ov.perUser.forEach(({s}) => {
+    [...s.variable,...s.fixed].forEach(item=>{
+      const cid=item.category||'other';
+      catTotals[cid]=(catTotals[cid]||0)+item.amount;
+    });
+  });
+  const catEntries = Object.entries(catTotals).sort((a,b)=>b[1]-a[1]);
+  const totExp = catEntries.reduce((s,[,v])=>s+v,0);
+  drawPie('ovPieChart', catEntries.map(([cid,val])=>({label:catName(cid),value:val,color:catColor(cid)})));
+  document.getElementById('ovPieLegend').innerHTML = catEntries.slice(0,7).map(([cid,val])=>`
+    <div class="legend-item">
+      <span class="legend-dot" style="background:${catColor(cid)}"></span>
+      <span class="legend-name">${catName(cid)}</span>
+      <span class="legend-val">${totExp>0?Math.round(val/totExp*100):0}%</span>
+    </div>`).join('') || '<div style="color:var(--text-muted);font-size:12px;">데이터 없음</div>';
+}
+
+/* ─────────── Dashboard ─────────── */
+function renderDashboard() {
+  const s    = calcSummary(activeUid);
+  const user = getUsers().find(u=>u.id===activeUid);
+  document.getElementById('dashTitle').textContent = `${mlStr(curYear,curMonth)} 가계부`;
+  document.getElementById('dashSub').textContent   = user ? `👤 ${user.name}` : '';
+  document.getElementById('sc-income').textContent   = fmt(s.inc);
+  document.getElementById('sc-fixed').textContent    = fmt(s.fix);
+  document.getElementById('sc-variable').textContent = fmt(s.vr);
+  document.getElementById('sc-living').textContent  = fmt(s.livBal);
+  document.getElementById('sc-allowance').textContent  = fmt(s.allBal);
+
+  document.getElementById('sc-income-sub').textContent   = `수입 ${s.income.length}건`;
+  document.getElementById('sc-fixed-sub').textContent    = `항목 ${s.fixed.length}건`;
+  document.getElementById('sc-variable-sub').textContent = `지출 ${s.variable.length}건`;
+
+  document.getElementById('sc-living-pct').textContent  = `${s.livPct}%`;
+  document.getElementById('sc-allowance-pct').textContent  = `${s.allPct}%`;
+  document.getElementById('sc-living-bar').style.width  = `${s.livPct}%`;
+  document.getElementById('sc-allowance-bar').style.width  = `${s.allPct}%`;
+
+  if (s.livBal < 0) document.getElementById('sc-living-bar').style.background = 'var(--danger)';
+  else document.getElementById('sc-living-bar').style.background = 'linear-gradient(90deg,#e91e63,#f06292)';
+  
+  if (s.allBal < 0) document.getElementById('sc-allowance-bar').style.background = 'var(--danger)';
+  else document.getElementById('sc-allowance-bar').style.background = 'linear-gradient(90deg,#9c27b0,#ba68c8)';
+
+  const badge = document.getElementById('savingsBadge');
+  if (s.sav < 0) { badge.className='progress-badge bad';  badge.textContent='⚠ 초과 지출'; }
+  else { badge.className='progress-badge good'; badge.textContent='정상'; }
+
+  const recent = [...s.variable].sort((a,b)=>(b.date||'').localeCompare(a.date||'')).slice(0,5);
+  renderEntryList('dashRecentList', recent, false, true);
+  renderEntryList('dashFixedList',  s.fixed, false, false, true);
+}
+
+/* ─────────── 공용 엔트리 리스트 ─────────── */
+function renderEntryList(elId, items, withEdit=true, showDate=false, isFixed=false) {
+  const el = document.getElementById(elId);
+  if (!items || !items.length) {
+    el.innerHTML=`<div class="empty-state"><div class="empty-icon">${isFixed?'📌':'📋'}</div><p>등록된 항목이 없습니다</p></div>`;
+    return;
+  }
+  el.innerHTML = items.map(item=>{
+    const clr  = catColor(item.category||'other');
+    const cnam = catName(item.category||'other');
+    const editBtns = withEdit
+      ? `<button class="btn-icon" onclick="editVarEntry('${item.id}')" title="수정">✏️</button>
+         <button class="btn-icon danger" onclick="deleteVarEntry('${item.id}')" title="삭제">🗑️</button>`
+      : '';
+    const chip  = showDate && item.date ? `<span class="date-chip">${item.date.slice(5)}</span>` : '';
+    const badge = isFixed ? `<span class="badge badge-fixed">고정</span>` : '';
+    const sub   = item.memo ? `<div class="entry-sub">${item.memo}</div>` : item.category ? `<div class="entry-sub">${cnam}</div>` : '';
+    return `<div class="entry-item">
+      <span class="entry-cat-dot" style="background:${clr}"></span>
+      <div class="entry-name">${item.name}${sub}</div>
+      ${chip}${badge}
+      <div class="entry-amount negative">${fmt(item.amount)}</div>
+      <div class="entry-actions">${editBtns}</div>
+    </div>`;
+  }).join('');
+}
+
+/* ─────────── Income View ─────────── */
+function renderIncome() {
+  const md   = getMonthData(activeUid);
+  const user = getUsers().find(u=>u.id===activeUid);
+  document.getElementById('incomeSubtitle').textContent = `${mlStr(curYear,curMonth)}${user?' · '+user.name:''}`;
+  const items = md.income||[];
+  const el    = document.getElementById('incomeList');
+  if (!items.length) {
+    el.innerHTML=`<div class="empty-state"><div class="empty-icon">💳</div><p>등록된 수입이 없습니다</p></div>`;
+  } else {
+    el.innerHTML = items.map(item=>`
+      <div class="entry-item">
+        <span class="entry-cat-dot" style="background:#0078d4"></span>
+        <div class="entry-name">${item.name}${item.memo?`<div class="entry-sub">${item.memo}</div>`:''}</div>
+        <span class="badge badge-income">수입</span>
+        <div class="entry-amount positive">${fmt(item.amount)}</div>
+        <div class="entry-actions">
+          <button class="btn-icon" onclick="editIncome('${item.id}')" title="수정">✏️</button>
+          <button class="btn-icon danger" onclick="deleteIncome('${item.id}')" title="삭제">🗑️</button>
+        </div>
+      </div>`).join('');
+  }
+  document.getElementById('incomeTotalDisp').textContent = fmt(items.reduce((s,i)=>s+i.amount,0));
+}
+
+/* ─────────── Fixed View ─────────── */
+function renderFixed() {
+  const items = getFixed(activeUid);
+  const el    = document.getElementById('fixedList');
+  if (!items.length) {
+    el.innerHTML=`<div class="empty-state"><div class="empty-icon">📌</div><p>등록된 고정지출이 없습니다</p></div>`;
+  } else {
+    el.innerHTML = items.map(item=>{
+      const clr  = catColor(item.category||'other');
+      const cnam = catName(item.category||'other');
+      return `<div class="entry-item">
+        <span class="entry-cat-dot" style="background:${clr}"></span>
+        <div class="entry-name">${item.name}<div class="entry-sub">${cnam}${item.memo?' · '+item.memo:''}</div></div>
+        <span class="badge badge-fixed">매월</span>
+        <div class="entry-amount negative">${fmt(item.amount)}</div>
+        <div class="entry-actions">
+          <button class="btn-icon" onclick="editFixed_('${item.id}')" title="수정">✏️</button>
+          <button class="btn-icon danger" onclick="deleteFixed_('${item.id}')" title="삭제">🗑️</button>
+        </div>
+      </div>`;
+    }).join('');
+  }
+  document.getElementById('fixedTotalDisp').textContent = fmt(items.reduce((s,f)=>s+f.amount,0));
+}
+
+/* ─────────── Variable View ─────────── */
+function renderVariable() {
+  const md   = getMonthData(activeUid);
+  const user = getUsers().find(u=>u.id===activeUid);
+  document.getElementById('varSubtitle').textContent = `${mlStr(curYear,curMonth)}${user?' · '+user.name:''}`;
+  let items = md.variable||[];
+  const usedCats = [...new Set(items.map(i=>i.category||'other'))];
+  document.getElementById('catFilterWrap').innerHTML = `
+    <button class="btn btn-sm ${catFilter===null?'btn-primary':'btn-ghost'}" onclick="setCatFilter(null)">전체</button>
+    ${usedCats.map(cid=>{
+      const c=CAT_MAP[cid]||CAT_MAP['other'];
+      const act=catFilter===cid;
+      return `<button class="btn btn-sm" style="${act?`background:${c.color};color:#fff;`:`border:1px solid ${c.color};color:${c.color};background:transparent;`}" onclick="setCatFilter('${cid}')">${c.name}</button>`;
+    }).join('')}`;
+  if (catFilter) items=items.filter(i=>(i.category||'other')===catFilter);
+  const sorted=[...items].sort((a,b)=>(b.date||'').localeCompare(a.date||''));
+  renderEntryList('variableList', sorted, true, true);
+  document.getElementById('varTotalDisp').textContent = fmt(items.reduce((s,v)=>s+v.amount,0));
+}
+
+function setCatFilter(cid) { catFilter=cid; renderVariable(); }
+
+/* ─────────── Stats View ─────────── */
+function renderStats() {
+  const s    = calcSummary(activeUid);
+  const user = getUsers().find(u=>u.id===activeUid);
+  document.getElementById('statsSubtitle').textContent = user ? `👤 ${user.name}` : '';
+
+  const catTotals = {};
+  [...s.variable,...s.fixed].forEach(v=>{ const cid=v.category||'other'; catTotals[cid]=(catTotals[cid]||0)+v.amount; });
+  const catEntries = Object.entries(catTotals).sort((a,b)=>b[1]-a[1]);
+  const totExp     = catEntries.reduce((s,[,v])=>s+v,0);
+
+  drawPie('pieChart', catEntries.map(([cid,val])=>({label:catName(cid),value:val,color:catColor(cid)})));
+  document.getElementById('pieLegend').innerHTML = catEntries.length===0
+    ? '<div style="color:var(--text-muted);font-size:12px;">데이터가 없습니다</div>'
+    : catEntries.map(([cid,val])=>`
+        <div class="legend-item">
+          <span class="legend-dot" style="background:${catColor(cid)}"></span>
+          <span class="legend-name">${catName(cid)}</span>
+          <span class="legend-val">${totExp>0?Math.round(val/totExp*100):0}%</span>
+        </div>`).join('');
+
+  const totalOut = s.fix+s.vr;
+  drawDonut('donutChart', [{label:'지출',value:totalOut,color:'#c42b1c'},{label:'잔액',value:Math.max(0,s.sav),color:'#107c10'}], s.inc);
+  document.getElementById('donutLegend').innerHTML=`
+    <div style="display:flex;gap:14px;flex-wrap:wrap;">
+      <div class="legend-item"><span class="legend-dot" style="background:#0078d4"></span><span class="legend-name">수입</span><span class="legend-val">${fmt(s.inc)}</span></div>
+      <div class="legend-item"><span class="legend-dot" style="background:#c42b1c"></span><span class="legend-name">지출</span><span class="legend-val">${fmt(totalOut)}</span></div>
+      <div class="legend-item"><span class="legend-dot" style="background:#107c10"></span><span class="legend-name">잔액</span><span class="legend-val">${fmt(s.sav)}</span></div>
+    </div>`;
+
+  const months=[];
+  for(let i=5;i>=0;i--){ let y=curYear,m=curMonth-i; while(m<=0){m+=12;y--;} months.push({y,m,key:`${y}-${String(m).padStart(2,'0')}`}); }
+  const maxV = months.reduce((mx,{key})=>{ const d=loadUD(activeUid)[key]||{}; return Math.max(mx,(d.income||[]).reduce((s,i)=>s+i.amount,0)); },1);
+  document.getElementById('barChartWrap').innerHTML = months.map(({m,key})=>{
+    const d   = loadUD(activeUid)[key]||{};
+    const inc = (d.income||[]).reduce((s,i)=>s+i.amount,0);
+    const fix = getFixed(activeUid).reduce((s,f)=>s+f.amount,0);
+    const vr  = (d.variable||[]).reduce((s,v)=>s+v.amount,0);
+    const out = fix+vr;
+    const H=140;
+    const iH=Math.round(inc/maxV*H);
+    const eH=Math.min(iH,Math.round(out/maxV*H));
+    const sH=Math.max(0,iH-eH);
+    return `<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;">
+      <div style="height:${H}px;display:flex;align-items:flex-end;justify-content:center;gap:3px;">
+        <div style="width:14px;height:${iH}px;background:#0078d4;border-radius:3px 3px 0 0;"></div>
+        <div style="width:14px;height:${eH}px;background:#c42b1c;border-radius:3px 3px 0 0;"></div>
+        <div style="width:14px;height:${sH}px;background:#107c10;border-radius:3px 3px 0 0;"></div>
+      </div>
+      <div style="font-size:10px;color:var(--text-muted);">${m}월</div>
+    </div>`;
+  }).join('');
+}
+
+/* ─────────── Settings View ─────────── */
+function renderSettingsView() {
+  const user = getUsers().find(u=>u.id===activeUid);
+  document.getElementById('settingsSubtitle').textContent = user ? `👤 ${user.name} 설정` : '설정';
+  document.getElementById('settingLivingGoal').value = getSettings(activeUid).livingGoal || '';
+  document.getElementById('settingAllowanceGoal').value = getSettings(activeUid).allowanceGoal || '';
+}
+function saveGoals() {
+  const liv = parseInt(document.getElementById('settingLivingGoal').value,10)||0;
+  const all = parseInt(document.getElementById('settingAllowanceGoal').value,10)||0;
+  saveSettings_(activeUid,{livingGoal:liv, allowanceGoal:all});
+  showToast('목표 금액이 저장되었습니다');
+  renderAll();
+}
+function confirmReset() {
+  const user = getUsers().find(u=>u.id===activeUid);
+  if (confirm(`'${user?.name}'의 모든 데이터를 초기화하시겠습니까?\n이 작업은 되돌릴 수 없습니다.`)) {
+    localStorage.removeItem(dataKey(activeUid));
+    showToast('데이터가 초기화되었습니다');
+    renderAll();
+  }
+}
+
+/* ─────────── Charts ─────────── */
+function drawPie(canvasId, data) {
+  const canvas = document.getElementById(canvasId);
+  if (!canvas) return;
+  const ctx=canvas.getContext('2d'), W=canvas.width, H=canvas.height, cx=W/2, cy=H/2, r=Math.min(W,H)/2-4;
+  ctx.clearRect(0,0,W,H);
+  const total=data.reduce((s,d)=>s+d.value,0);
+  if (!total) { ctx.beginPath();ctx.arc(cx,cy,r,0,Math.PI*2);ctx.fillStyle='#e5e5e5';ctx.fill(); }
+  else {
+    let st=-Math.PI/2;
+    data.forEach(d=>{ const sw=(d.value/total)*Math.PI*2; ctx.beginPath();ctx.moveTo(cx,cy);ctx.arc(cx,cy,r,st,st+sw);ctx.closePath();ctx.fillStyle=d.color;ctx.fill();st+=sw; });
+  }
+  ctx.beginPath();ctx.arc(cx,cy,r*0.52,0,Math.PI*2);ctx.fillStyle='#fff';ctx.fill();
+}
+function drawDonut(canvasId, data, total) {
+  const canvas=document.getElementById(canvasId);
+  if (!canvas) return;
+  const ctx=canvas.getContext('2d'), W=canvas.width, H=canvas.height, cx=W/2, cy=H/2, r=Math.min(W,H)/2-4;
+  ctx.clearRect(0,0,W,H);
+  if (!total) { ctx.beginPath();ctx.arc(cx,cy,r,0,Math.PI*2);ctx.fillStyle='#e5e5e5';ctx.fill(); }
+  else {
+    let st=-Math.PI/2;
+    data.forEach(d=>{ const sw=Math.max(0,(d.value/total))*Math.PI*2; if(!sw)return; ctx.beginPath();ctx.moveTo(cx,cy);ctx.arc(cx,cy,r,st,st+sw);ctx.closePath();ctx.fillStyle=d.color;ctx.fill();st+=sw; });
+  }
+  ctx.beginPath();ctx.arc(cx,cy,r*0.52,0,Math.PI*2);ctx.fillStyle='#fff';ctx.fill();
+  ctx.textAlign='center';ctx.textBaseline='middle';
+  ctx.fillStyle='#1a1a1a';ctx.font='bold 13px Pretendard,sans-serif';ctx.fillText('지출률',cx,cy-8);
+  const pct=total>0?Math.min(100,Math.round((data[0]?.value||0)/total*100)):0;
+  ctx.font='bold 16px Pretendard,sans-serif';ctx.fillStyle='#c42b1c';ctx.fillText(`${pct}%`,cx,cy+10);
+}
+
+/* ─────────── User CRUD ─────────── */
+function openAddUser() {
+  document.getElementById('userNameInput').value='';
+  selColor = USER_COLORS[getUsers().length % USER_COLORS.length];
+  renderColorPicker();
+  openModal('userModal');
+  setTimeout(()=>document.getElementById('userNameInput').focus(),100);
+}
+function renderColorPicker() {
+  document.getElementById('colorPicker').innerHTML = USER_COLORS.map(c=>`
+    <div class="color-swatch${c===selColor?' selected':''}" style="background:${c}" onclick="selectColor('${c}')"></div>`).join('');
+}
+function selectColor(c) { selColor=c; renderColorPicker(); }
+function saveUser() {
+  const name=document.getElementById('userNameInput').value.trim();
+  if (!name) { showToast('이름을 입력해주세요'); return; }
+  const users=getUsers();
+  const newUser={ id:`user_${genId()}`, name, color:selColor };
+  users.push(newUser);
+  saveUsers(users);
+  closeModal('userModal');
+  showToast(`${name}님이 추가되었습니다`);
+  switchUser(newUser.id);
+}
+function deleteUser(userId) {
+  const users=getUsers();
+  const user=users.find(u=>u.id===userId);
+  if (!confirm(`'${user?.name}'을(를) 삭제하시겠습니까?\n모든 데이터가 함께 삭제됩니다.`)) return;
+  saveUsers(users.filter(u=>u.id!==userId));
+  localStorage.removeItem(dataKey(userId));
+  showToast(`${user?.name}님이 삭제되었습니다`);
+  if (activeUid===userId) switchUser('__overview__');
+  else renderAll();
+}
+
+/* ─────────── Income CRUD ─────────── */
+function openAddIncome() {
+  editingId=null;
+  document.getElementById('incomeMTitle').textContent='수입 추가';
+  ['incomeNameInput','incomeAmountInput','incomeMemoInput'].forEach(id=>document.getElementById(id).value='');
+  openModal('incomeModal');
+}
+function editIncome(id) {
+  const item=(getMonthData(activeUid).income||[]).find(i=>i.id===id); if(!item)return;
+  editingId=id;
+  document.getElementById('incomeMTitle').textContent='수입 수정';
+  document.getElementById('incomeNameInput').value=item.name;
+  document.getElementById('incomeAmountInput').value=item.amount;
+  document.getElementById('incomeMemoInput').value=item.memo||'';
+  openModal('incomeModal');
+}
+function saveIncome() {
+  const name=document.getElementById('incomeNameInput').value.trim();
+  const amount=parseInt(document.getElementById('incomeAmountInput').value,10);
+  const memo=document.getElementById('incomeMemoInput').value.trim();
+  if (!name||isNaN(amount)||amount<=0){showToast('항목명과 금액을 올바르게 입력해주세요');return;}
+  const md=getMonthData(activeUid); if(!md.income)md.income=[];
+  if (editingId) { const i=md.income.findIndex(x=>x.id===editingId); if(i>=0)md.income[i]={...md.income[i],name,amount,memo}; }
+  else md.income.push({id:genId(),name,amount,memo});
+  saveMonthData(activeUid,md);
+  closeModal('incomeModal'); showToast(editingId?'수정되었습니다':'수입이 추가되었습니다'); renderAll();
+}
+function deleteIncome(id) {
+  if(!confirm('이 수입 항목을 삭제하시겠습니까?'))return;
+  const md=getMonthData(activeUid); md.income=(md.income||[]).filter(i=>i.id!==id);
+  saveMonthData(activeUid,md); showToast('삭제되었습니다'); renderAll();
+}
+
+/* ─────────── Fixed CRUD ─────────── */
+function populateCatSelect(selId, selectedId) {
+  document.getElementById(selId).innerHTML=CATEGORIES.map(c=>`<option value="${c.id}"${c.id===(selectedId||'other')?' selected':''}>${c.name}</option>`).join('');
+}
+function openAddFixed() {
+  editingId=null;
+  document.getElementById('fixedMTitle').textContent='고정지출 추가';
+  ['fixedNameInput','fixedAmountInput','fixedMemoInput'].forEach(id=>document.getElementById(id).value='');
+  populateCatSelect('fixedCatInput','other');
+  openModal('fixedModal');
+}
+function editFixed_(id) {
+  const item=getFixed(activeUid).find(f=>f.id===id); if(!item)return;
+  editingId=id;
+  document.getElementById('fixedMTitle').textContent='고정지출 수정';
+  document.getElementById('fixedNameInput').value=item.name;
+  document.getElementById('fixedAmountInput').value=item.amount;
+  document.getElementById('fixedMemoInput').value=item.memo||'';
+  populateCatSelect('fixedCatInput',item.category||'other');
+  openModal('fixedModal');
+}
+function saveFixed() {
+  const name=document.getElementById('fixedNameInput').value.trim();
+  const amount=parseInt(document.getElementById('fixedAmountInput').value,10);
+  const category=document.getElementById('fixedCatInput').value;
+  const memo=document.getElementById('fixedMemoInput').value.trim();
+  if (!name||isNaN(amount)||amount<=0){showToast('항목명과 금액을 올바르게 입력해주세요');return;}
+  let list=getFixed(activeUid);
+  if (editingId) list=list.map(f=>f.id===editingId?{...f,name,amount,category,memo}:f);
+  else list.push({id:genId(),name,amount,category,memo});
+  saveFixed_(activeUid,list);
+  closeModal('fixedModal'); showToast(editingId?'수정되었습니다':'고정지출이 추가되었습니다'); renderAll();
+}
+function deleteFixed_(id) {
+  if(!confirm('이 고정지출 항목을 삭제하시겠습니까?'))return;
+  saveFixed_(activeUid,getFixed(activeUid).filter(f=>f.id!==id));
+  showToast('삭제되었습니다'); renderAll();
+}
+
+/* ─────────── Variable CRUD ─────────── */
+function openAddVariable() {
+  editingId=null;
+  document.getElementById('varMTitle').textContent='지출 추가';
+  ['varNameInput','varAmountInput','varMemoInput'].forEach(id=>document.getElementById(id).value='');
+  document.getElementById('varDateInput').value=todayStr();
+  populateCatSelect('varCatInput','food');
+  openModal('variableModal');
+}
+function editVarEntry(id) {
+  const md=getMonthData(activeUid); const item=(md.variable||[]).find(v=>v.id===id); if(!item)return;
+  editingId=id;
+  document.getElementById('varMTitle').textContent='지출 수정';
+  document.getElementById('varNameInput').value=item.name;
+  document.getElementById('varAmountInput').value=item.amount;
+  document.getElementById('varMemoInput').value=item.memo||'';
+  document.getElementById('varDateInput').value=item.date||todayStr();
+  populateCatSelect('varCatInput',item.category||'other');
+  openModal('variableModal');
+}
+function saveVariable() {
+  const name=document.getElementById('varNameInput').value.trim();
+  const amount=parseInt(document.getElementById('varAmountInput').value,10);
+  const category=document.getElementById('varCatInput').value;
+  const date=document.getElementById('varDateInput').value;
+  const memo=document.getElementById('varMemoInput').value.trim();
+  if (!name||isNaN(amount)||amount<=0){showToast('항목명과 금액을 올바르게 입력해주세요');return;}
+  const md=getMonthData(activeUid); if(!md.variable)md.variable=[];
+  if (editingId){const i=md.variable.findIndex(v=>v.id===editingId);if(i>=0)md.variable[i]={...md.variable[i],name,amount,category,date,memo};}
+  else md.variable.push({id:genId(),name,amount,category,date,memo});
+  saveMonthData(activeUid,md);
+  closeModal('variableModal'); showToast(editingId?'수정되었습니다':'지출이 추가되었습니다'); renderAll();
+}
+function deleteVarEntry(id) {
+  if(!confirm('이 지출 항목을 삭제하시겠습니까?'))return;
+  const md=getMonthData(activeUid); md.variable=(md.variable||[]).filter(v=>v.id!==id);
+  saveMonthData(activeUid,md); showToast('삭제되었습니다'); renderAll();
+}
+
+/* ─────────── CSV ─────────── */
+function exportCSV() {
+  if (activeUid==='__overview__') {
+    const users=getUsers();
+    let rows=[['사용자','유형','항목명','카테고리','금액','날짜','메모']];
+    users.forEach(u=>{
+      const md=getMonthData(u.id);
+      getFixed(u.id).forEach(f=>rows.push([u.name,'고정지출',f.name,catName(f.category||'other'),f.amount,'매월',f.memo||'']));
+      (md.income||[]).forEach(i=>rows.push([u.name,'수입',i.name,'',i.amount,'',i.memo||'']));
+      (md.variable||[]).forEach(v=>rows.push([u.name,'변동지출',v.name,catName(v.category||'other'),v.amount,v.date||'',v.memo||'']));
+    });
+    dlCSV(rows,`통합가계부_${monthKey()}`);
+  } else {
+    const user=getUsers().find(u=>u.id===activeUid);
+    const md=getMonthData(activeUid);
+    let rows=[['유형','항목명','카테고리','금액','날짜','메모']];
+    getFixed(activeUid).forEach(f=>rows.push(['고정지출',f.name,catName(f.category||'other'),f.amount,'매월',f.memo||'']));
+    (md.income||[]).forEach(i=>rows.push(['수입',i.name,'',i.amount,'',i.memo||'']));
+    (md.variable||[]).forEach(v=>rows.push(['변동지출',v.name,catName(v.category||'other'),v.amount,v.date||'',v.memo||'']));
+    dlCSV(rows,`${user?.name||'가계부'}_${monthKey()}`);
+  }
+}
+function dlCSV(rows,name) {
+  const csv=rows.map(r=>r.map(c=>`"${String(c).replace(/"/g,'""')}"`).join(',')).join('\n');
+  const blob=new Blob(['\uFEFF'+csv],{type:'text/csv;charset=utf-8;'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a'); a.href=url; a.download=`${name}.csv`; a.click(); URL.revokeObjectURL(url);
+  showToast('CSV 파일이 다운로드되었습니다');
+}
+
+/* ─────────── Modal ─────────── */
+function openModal(id)  { document.getElementById(id).classList.add('open'); }
+function closeModal(id) { document.getElementById(id).classList.remove('open'); editingId=null; }
+document.querySelectorAll('.modal-overlay').forEach(o=>o.addEventListener('click',e=>{ if(e.target===o)closeModal(o.id); }));
+
+/* ─────────── Toast ─────────── */
+let toastTimer=null;
+function showToast(msg) {
+  const el=document.getElementById('toast'); el.textContent=msg; el.classList.add('show');
+  clearTimeout(toastTimer); toastTimer=setTimeout(()=>el.classList.remove('show'),2500);
+}
+
+/* ─────────── 이벤트 바인딩 ─────────── */
+document.getElementById('tab-__overview__').addEventListener('click',()=>switchUser('__overview__'));
+document.getElementById('btnAddUser').addEventListener('click',openAddUser);
+document.getElementById('btnPrevMonth').addEventListener('click',()=>{
+  curMonth--; if(curMonth<1){curMonth=12;curYear--;} catFilter=null;
+  document.getElementById('monthLabel').textContent=mlStr(curYear,curMonth); renderAll();
+});
+document.getElementById('btnNextMonth').addEventListener('click',()=>{
+  curMonth++; if(curMonth>12){curMonth=1;curYear++;} catFilter=null;
+  document.getElementById('monthLabel').textContent=mlStr(curYear,curMonth); renderAll();
+});
+document.getElementById('btnExportCSV').addEventListener('click',exportCSV);
+document.getElementById('btnAddIncome').addEventListener('click',openAddIncome);
+document.getElementById('btnAddFixed').addEventListener('click',openAddFixed);
+document.getElementById('btnAddVariable').addEventListener('click',openAddVariable);
+document.querySelectorAll('.nav-item[data-view]').forEach(btn=>btn.addEventListener('click',()=>navigate(btn.dataset.view)));
+
+// Enter 키
+['incomeNameInput','incomeAmountInput','incomeMemoInput'].forEach(id=>document.getElementById(id)?.addEventListener('keydown',e=>{if(e.key==='Enter')saveIncome();}));
+['fixedNameInput','fixedAmountInput','fixedMemoInput'].forEach(id=>document.getElementById(id)?.addEventListener('keydown',e=>{if(e.key==='Enter')saveFixed();}));
+['varNameInput','varAmountInput','varMemoInput'].forEach(id=>document.getElementById(id)?.addEventListener('keydown',e=>{if(e.key==='Enter')saveVariable();}));
+document.getElementById('userNameInput').addEventListener('keydown',e=>{if(e.key==='Enter')saveUser();});
+
+/* ─────────── 초기화 ─────────── */
+document.getElementById('monthLabel').textContent = mlStr(curYear,curMonth);
+switchUser('__overview__');
+</script>
+</body>
+</html>
