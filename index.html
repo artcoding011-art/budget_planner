@@ -541,17 +541,13 @@
       </div>
       <div class="card">
         <div class="list-header">
-          <div class="list-title">이번 달 변동 지출</div>
-          <button class="btn btn-ghost btn-sm" id="btnToggleDashVarView" onclick="toggleDashVarView()">개별 항목 보기</button>
+          <div class="list-title">이번 달 지출 내역</div>
+          <div style="display:flex;gap:8px;">
+            <button class="btn btn-ghost btn-sm" onclick="navigate('fixed')">고정지출 관리</button>
+            <button class="btn btn-ghost btn-sm" id="btnToggleDashVarView" onclick="toggleDashVarView()">개별 항목 보기</button>
+          </div>
         </div>
         <div class="entry-list" id="dashRecentList"></div>
-      </div>
-      <div class="card">
-        <div class="list-header">
-          <div class="list-title">이번 달 고정 지출</div>
-          <button class="btn btn-ghost btn-sm" onclick="navigate('fixed')">관리</button>
-        </div>
-        <div class="entry-list" id="dashFixedList"></div>
       </div>
     </section>
 
@@ -1150,6 +1146,9 @@ function renderDashboard() {
 
   document.getElementById('btnToggleDashVarView').textContent = dashVarViewMode === 'category' ? '개별 항목 보기' : '카테고리별 보기';
 
+  const fixedObj = { id: 'fixed-sum', name: '고정지출 합계', amount: s.fix, color: '#c42b1c', isFixedSum: true };
+  let displayItems = [];
+
   if (dashVarViewMode === 'category') {
     const catTotals = {};
     s.variable.forEach(v => {
@@ -1159,13 +1158,13 @@ function renderDashboard() {
     const grouped = Object.entries(catTotals).sort((a,b)=>b[1]-a[1]).map(([cid, amount]) => ({
       id: cid, name: catName(cid), category: cid, amount: amount
     }));
-    renderEntryList('dashRecentList', grouped, false, false, false);
+    displayItems = [fixedObj, ...grouped];
+    renderEntryList('dashRecentList', displayItems, false, false, false);
   } else {
     const recent = [...s.variable].sort((a,b)=>(b.date||'').localeCompare(a.date||'')).slice(0,5);
-    renderEntryList('dashRecentList', recent, false, true);
+    displayItems = [fixedObj, ...recent];
+    renderEntryList('dashRecentList', displayItems, false, true, false);
   }
-  
-  renderEntryList('dashFixedList',  s.fixed, false, false, true);
 }
 
 /* ─────────── 공용 엔트리 리스트 ─────────── */
@@ -1176,14 +1175,15 @@ function renderEntryList(elId, items, withEdit=true, showDate=false, isFixed=fal
     return;
   }
   el.innerHTML = items.map(item=>{
-    const clr  = isFixed ? (item.color || '#c42b1c') : catColor(item.category||'other');
-    const cnam = isFixed ? '' : catName(item.category||'other');
-    const editBtns = withEdit
+    const isItemFixed = isFixed || item.isFixedSum;
+    const clr  = isItemFixed ? (item.color || '#c42b1c') : catColor(item.category||'other');
+    const cnam = isItemFixed ? '' : catName(item.category||'other');
+    const editBtns = (withEdit && !item.isFixedSum)
       ? `<button class="btn-icon" onclick="editVarEntry('${item.id}')" title="수정">✏️</button>
          <button class="btn-icon danger" onclick="deleteVarEntry('${item.id}')" title="삭제">🗑️</button>`
       : '';
     const chip  = showDate && item.date ? `<span class="date-chip">${item.date.slice(5)}</span>` : '';
-    const badge = isFixed ? `<span class="badge badge-fixed">고정</span>` : '';
+    const badge = isItemFixed ? `<span class="badge badge-fixed">고정</span>` : '';
     const sub   = item.memo ? `<div class="entry-sub">${item.memo}</div>` : cnam ? `<div class="entry-sub">${cnam}</div>` : '';
     return `<div class="entry-item">
       <span class="entry-cat-dot" style="background:${clr}"></span>
