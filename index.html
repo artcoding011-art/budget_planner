@@ -187,7 +187,7 @@
     }
 
     /* ── Summary Grid ── */
-    .summary-grid { display: grid; grid-template-columns: repeat(5,1fr); gap: 14px; }
+    .summary-grid { display: grid; grid-template-columns: repeat(6,1fr); gap: 14px; }
     @media (max-width: 1200px) { .summary-grid { grid-template-columns: repeat(3,1fr); } }
     @media (max-width: 800px)  { .summary-grid { grid-template-columns: repeat(2,1fr); } }
     .summary-card {
@@ -201,8 +201,16 @@
     .summary-card.income::before   { background: linear-gradient(90deg,#0078d4,#50a5f1); }
     .summary-card.fixed::before    { background: linear-gradient(90deg,#c42b1c,#e77066); }
     .summary-card.variable::before { background: linear-gradient(90deg,#9d5d00,#f4a944); }
+    .summary-card.savings::before  { background: linear-gradient(90deg,#00b0ff,#00e5ff); }
     .summary-card.living::before   { background: linear-gradient(90deg,#e91e63,#f06292); }
     .summary-card.allowance::before{ background: linear-gradient(90deg,#9c27b0,#ba68c8); }
+    .summary-card.savings-highlight {
+      border: 1.5px solid #00b0ff;
+      box-shadow: 0 4px 14px rgba(0, 176, 255, 0.18) !important;
+    }
+    .summary-card.savings-highlight:hover {
+      box-shadow: 0 6px 18px rgba(0, 176, 255, 0.28) !important;
+    }
     .sc-label { font-size: 11px; font-weight: 600; color: var(--text-muted); letter-spacing: 0.06em; text-transform: uppercase; }
     .sc-icon  { position:absolute; right:16px; top:14px; font-size:22px; opacity:0.18; }
     .sc-amount { font-size: 22px; font-weight: 700; margin: 6px 0 4px; letter-spacing:-0.02em; }
@@ -450,6 +458,12 @@
           <div class="sc-amount variable" id="ov-variable">₩0</div>
           <div class="sc-sub" id="ov-variable-sub"></div>
         </div>
+        <div class="summary-card savings savings-highlight">
+          <span class="sc-icon">💰</span>
+          <div class="sc-label">합산 예상 잔액</div>
+          <div class="sc-amount" id="ov-savings">₩0</div>
+          <div class="sc-sub" id="ov-savings-sub">전체 예상 저축액</div>
+        </div>
         <div class="summary-card living">
           <span class="sc-icon">🛒</span>
           <div class="sc-label">합산 생활비 잔액</div>
@@ -519,6 +533,12 @@
           <div class="sc-label">변동 지출</div>
           <div class="sc-amount variable" id="sc-variable">₩0</div>
           <div class="sc-sub" id="sc-variable-sub">지출 0건</div>
+        </div>
+        <div class="summary-card savings savings-highlight">
+          <span class="sc-icon">💰</span>
+          <div class="sc-label">예상 잔액</div>
+          <div class="sc-amount" id="sc-savings">₩0</div>
+          <div class="sc-sub" id="sc-savings-sub">이번 달 예상 저축액</div>
         </div>
         <div class="summary-card living">
           <span class="sc-icon">🛒</span>
@@ -1038,8 +1058,10 @@ function renderOverview() {
   document.getElementById('ovSubtitle').textContent = `${mlStr(curYear,curMonth)} · ${users.length}명 통합 현황`;
 
   if (users.length === 0) {
-    ['ov-income','ov-fixed','ov-variable','ov-living','ov-allowance'].forEach(id=>document.getElementById(id).textContent='₩0');
+    ['ov-income','ov-fixed','ov-variable','ov-savings','ov-living','ov-allowance'].forEach(id=>document.getElementById(id).textContent='₩0');
     ['ov-income-sub','ov-fixed-sub','ov-variable-sub'].forEach(id=>document.getElementById(id).textContent='');
+    const ovSavSubEl = document.getElementById('ov-savings-sub');
+    if (ovSavSubEl) ovSavSubEl.textContent = '전체 예상 저축액';
     document.getElementById('ov-living-pct').textContent='0%';
     document.getElementById('ov-allowance-pct').textContent='0%';
     document.getElementById('ov-living-bar').style.width='0%';
@@ -1062,6 +1084,20 @@ function renderOverview() {
   document.getElementById('ov-variable').textContent = fmt(ov.totVr);
   document.getElementById('ov-living').textContent  = fmt(ov.totLivBal);
   document.getElementById('ov-allowance').textContent  = fmt(ov.totAllBal);
+
+  const ovSavAmountEl = document.getElementById('ov-savings');
+  const ovSavSubEl = document.getElementById('ov-savings-sub');
+  if (ovSavAmountEl) {
+    if (ov.totSav < 0) {
+      ovSavAmountEl.textContent = `-₩${Math.abs(Math.round(ov.totSav)).toLocaleString('ko-KR')}`;
+      ovSavAmountEl.style.color = 'var(--danger)';
+      if (ovSavSubEl) ovSavSubEl.textContent = '합산 예산 초과 상태 ⚠';
+    } else {
+      ovSavAmountEl.textContent = `+₩${Math.round(ov.totSav).toLocaleString('ko-KR')}`;
+      ovSavAmountEl.style.color = '#107c10';
+      if (ovSavSubEl) ovSavSubEl.textContent = '전체 예상 저축액';
+    }
+  }
 
   document.getElementById('ov-income-sub').textContent   = `${users.length}명 합산`;
   document.getElementById('ov-fixed-sub').textContent    = `${users.length}명 합산`;
@@ -1139,6 +1175,20 @@ function renderDashboard() {
   document.getElementById('sc-variable').textContent = fmt(s.vr);
   document.getElementById('sc-living').textContent  = fmt(s.livBal);
   document.getElementById('sc-allowance').textContent  = fmt(s.allBal);
+
+  const savAmountEl = document.getElementById('sc-savings');
+  const savSubEl = document.getElementById('sc-savings-sub');
+  if (savAmountEl) {
+    if (s.sav < 0) {
+      savAmountEl.textContent = `-₩${Math.abs(Math.round(s.sav)).toLocaleString('ko-KR')}`;
+      savAmountEl.style.color = 'var(--danger)';
+      if (savSubEl) savSubEl.textContent = '예산 초과 상태 ⚠';
+    } else {
+      savAmountEl.textContent = `+₩${Math.round(s.sav).toLocaleString('ko-KR')}`;
+      savAmountEl.style.color = '#107c10';
+      if (savSubEl) savSubEl.textContent = '이번 달 예상 저축액';
+    }
+  }
 
   document.getElementById('sc-income-sub').textContent   = `수입 ${s.income.length}건`;
   document.getElementById('sc-fixed-sub').textContent    = `항목 ${s.fixed.length}건`;
