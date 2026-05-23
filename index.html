@@ -206,17 +206,18 @@
     
     /* ── Savings Header Widget ── */
     .savings-header-widget {
-      display: inline-flex; align-items: center; gap: 8px;
-      padding: 6px 14px; border-radius: 99px;
-      font-size: 13px; font-weight: 500;
+      display: inline-flex; align-items: center; gap: 10px;
+      padding: 6px 16px; border-radius: 99px;
+      font-size: 14px; font-weight: 500;
       backdrop-filter: blur(8px);
       transition: all 0.3s ease;
-      border: 1px solid var(--border);
+      border: 1.5px solid var(--border);
       align-self: center;
+      box-shadow: var(--shadow-sm);
     }
-    .savings-header-widget .widget-label { color: var(--text-secondary); font-size: 11px; font-weight: 600; text-transform: uppercase; }
-    .savings-header-widget .widget-amount { font-weight: 700; font-size: 14px; }
-    .savings-header-widget .widget-sub { font-size: 11px; color: var(--text-muted); padding-left: 6px; border-left: 1px solid var(--border); }
+    .savings-header-widget .widget-label { color: var(--text-secondary); font-size: 12px; font-weight: 600; text-transform: uppercase; }
+    .savings-header-widget .widget-amount { font-weight: 700; font-size: 16px; letter-spacing: -0.01em; }
+    .savings-header-widget .widget-sub { font-size: 11px; color: var(--text-muted); padding-left: 8px; border-left: 1px solid var(--border); }
     
     .savings-header-widget.plus {
       background: rgba(16, 124, 16, 0.06);
@@ -1108,16 +1109,20 @@ function renderOverview() {
   document.getElementById('ov-living').textContent  = fmt(ov.totLivBal);
   document.getElementById('ov-allowance').textContent  = fmt(ov.totAllBal);
 
+  const totExpectedSav = ov.perUser.reduce((sum, u) => {
+    return sum + (u.s.inc - u.s.fix - (u.s.livGoal + u.s.allGoal));
+  }, 0);
+
   const ovSavHeaderEl = document.getElementById('ovSavingsHeader');
   const ovSavAmountEl = document.getElementById('ov-savings-val');
   const ovSavSubEl = document.getElementById('ov-savings-sub-val');
   if (ovSavAmountEl) {
-    if (ov.totSav < 0) {
-      ovSavAmountEl.textContent = `-₩${Math.abs(Math.round(ov.totSav)).toLocaleString('ko-KR')}`;
+    if (totExpectedSav < 0) {
+      ovSavAmountEl.textContent = `-₩${Math.abs(Math.round(totExpectedSav)).toLocaleString('ko-KR')}`;
       if (ovSavHeaderEl) ovSavHeaderEl.className = 'savings-header-widget minus';
-      if (ovSavSubEl) ovSavSubEl.textContent = '합산 예산 초과 ⚠';
+      if (ovSavSubEl) ovSavSubEl.textContent = '목표치 초과 예상 ⚠';
     } else {
-      ovSavAmountEl.textContent = `+₩${Math.round(ov.totSav).toLocaleString('ko-KR')}`;
+      ovSavAmountEl.textContent = `+₩${Math.round(totExpectedSav).toLocaleString('ko-KR')}`;
       if (ovSavHeaderEl) ovSavHeaderEl.className = 'savings-header-widget plus';
       if (ovSavSubEl) ovSavSubEl.textContent = '전체 예상 저축액';
     }
@@ -1200,18 +1205,19 @@ function renderDashboard() {
   document.getElementById('sc-living').textContent  = fmt(s.livBal);
   document.getElementById('sc-allowance').textContent  = fmt(s.allBal);
 
+  const expectedSav = s.inc - s.fix - (s.livGoal + s.allGoal);
   const savHeaderEl = document.getElementById('dashSavingsHeader');
   const savAmountEl = document.getElementById('sc-savings-val');
   const savSubEl = document.getElementById('sc-savings-sub-val');
   if (savAmountEl) {
-    if (s.sav < 0) {
-      savAmountEl.textContent = `-₩${Math.abs(Math.round(s.sav)).toLocaleString('ko-KR')}`;
+    if (expectedSav < 0) {
+      savAmountEl.textContent = `-₩${Math.abs(Math.round(expectedSav)).toLocaleString('ko-KR')}`;
       if (savHeaderEl) savHeaderEl.className = 'savings-header-widget minus';
-      if (savSubEl) savSubEl.textContent = '예산 초과 ⚠';
+      if (savSubEl) savSubEl.textContent = '목표치 초과 예상 ⚠';
     } else {
-      savAmountEl.textContent = `+₩${Math.round(s.sav).toLocaleString('ko-KR')}`;
+      savAmountEl.textContent = `+₩${Math.round(expectedSav).toLocaleString('ko-KR')}`;
       if (savHeaderEl) savHeaderEl.className = 'savings-header-widget plus';
-      if (savSubEl) savSubEl.textContent = '예상 저축액';
+      if (savSubEl) savSubEl.textContent = '목표 대비 예상 저축액';
     }
   }
 
