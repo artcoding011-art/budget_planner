@@ -798,13 +798,59 @@ let catFilter   = null;
 let selColor    = USER_COLORS[0];
 
 /* ─────────── Storage ─────────── */
+let dbCache = {};
+
 const USERS_KEY = 'budgetApp_users';
 const dataKey   = uid => `budgetApp_data_${uid}`;
 
-function getUsers()        { try { return JSON.parse(localStorage.getItem(USERS_KEY)||'[]'); } catch { return []; } }
-function saveUsers(u)      { localStorage.setItem(USERS_KEY, JSON.stringify(u)); }
-function loadUD(uid)       { try { return JSON.parse(localStorage.getItem(dataKey(uid))||'{}'); } catch { return {}; } }
-function saveUD(uid, data) { localStorage.setItem(dataKey(uid), JSON.stringify(data)); }
+function getUsers()        { return dbCache[USERS_KEY] || []; }
+function saveUsers(u)      { dbCache[USERS_KEY] = u; syncDb(USERS_KEY, u); }
+function loadUD(uid)       { return dbCache[dataKey(uid)] || {}; }
+function saveUD(uid, data) { dbCache[dataKey(uid)] = data; syncDb(dataKey(uid), data); }
+function removeUD(uid)     { delete dbCache[dataKey(uid)]; syncDb(dataKey(uid), null); }
+
+async function syncDb(key, value) {
+  try {
+    await fetch('/api/db', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ key, value })
+    });
+  } catch (error) {
+    console.error('DB Sync Error:', error);
+    showToast('서버 동기화에 실패했습니다.');
+  }
+}
+
+async function loadFromDb() {
+  try {
+    const res = await fetch('/api/db');
+    if (res.ok) {
+      dbCache = await res.json();
+      if (Object.keys(dbCache).length === 0) {
+        let migrated = false;
+        for (let i = 0; i < localStorage.length; i++) {
+          const k = localStorage.key(i);
+          if (k && k.startsWith('budgetApp_')) {
+            const val = JSON.parse(localStorage.getItem(k));
+            dbCache[k] = val;
+            syncDb(k, val);
+            migrated = true;
+          }
+        }
+        if (migrated) console.log("Migrated local data to Vercel Postgres");
+      }
+    } else {
+      throw new Error('Failed to fetch DB');
+    }
+  } catch (error) {
+    console.error('Failed to load DB, falling back to local storage', error);
+    for (let i = 0; i < localStorage.length; i++) {
+        const k = localStorage.key(i);
+        if (k && k.startsWith('budgetApp_')) dbCache[k] = JSON.parse(localStorage.getItem(k));
+    }
+  }
+}
 
 function monthKey() { return `${curYear}-${String(curMonth).padStart(2,'0')}`; }
 
@@ -1232,7 +1278,7 @@ function saveGoals() {
 function confirmReset() {
   const user = getUsers().find(u=>u.id===activeUid);
   if (confirm(`'${user?.name}'의 모든 데이터를 초기화하시겠습니까?\n이 작업은 되돌릴 수 없습니다.`)) {
-    localStorage.removeItem(dataKey(activeUid));
+    removeUD(activeUid);
     showToast('데이터가 초기화되었습니다');
     renderAll();
   }
@@ -1298,7 +1344,7 @@ function deleteUser(userId) {
   const user=users.find(u=>u.id===userId);
   if (!confirm(`'${user?.name}'을(를) 삭제하시겠습니까?\n모든 데이터가 함께 삭제됩니다.`)) return;
   saveUsers(users.filter(u=>u.id!==userId));
-  localStorage.removeItem(dataKey(userId));
+  removeUD(userId);
   showToast(`${user?.name}님이 삭제되었습니다`);
   if (activeUid===userId) switchUser('__overview__');
   else renderAll();
@@ -1482,7 +1528,14 @@ document.getElementById('userNameInput').addEventListener('keydown',e=>{if(e.key
 
 /* ─────────── 초기화 ─────────── */
 document.getElementById('monthLabel').textContent = mlStr(curYear,curMonth);
-switchUser('__overview__');
+
+async function initApp() {
+  document.body.insertAdjacentHTML('beforeend', '<div id="appLoading" style="position:fixed;inset:0;background:var(--bg-base);z-index:9999;display:flex;flex-direction:column;gap:12px;align-items:center;justify-content:center;font-size:18px;font-weight:600;color:var(--text-primary);"><div style="font-size:36px;animation:spin 1.5s linear infinite;">☁️</div><div>클라우드 동기화 중...</div></div><style>@keyframes spin { 100% { transform:rotate(360deg); } }</style>');
+  await loadFromDb();
+  document.getElementById('appLoading').remove();
+  switchUser('__overview__');
+}
+initApp();
 </script>
 </body>
 </html>

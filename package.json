@@ -1,0 +1,12 @@
+{
+  "name": "budget-planner",
+  "version": "1.0.0",
+  "description": "Budget Planner with Vercel Postgres",
+  "main": "api/db.js",
+  "scripts": {
+    "start": "npx serve ."
+  },
+  "dependencies": {
+    "@vercel/postgres": "^0.8.0"
+  }
+}
