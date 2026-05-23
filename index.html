@@ -1254,9 +1254,10 @@ function renderVariable() {
   document.getElementById('catFilterWrap').innerHTML = `
     <button class="btn btn-sm ${catFilter===null?'btn-primary':'btn-ghost'}" onclick="setCatFilter(null)">전체</button>
     ${usedCats.map(cid=>{
-      const c=CAT_MAP[cid]||CAT_MAP['other'];
+      const name = catName(cid);
+      const color = catColor(cid);
       const act=catFilter===cid;
-      return `<button class="btn btn-sm" style="${act?`background:${c.color};color:#fff;`:`border:1px solid ${c.color};color:${c.color};background:transparent;`}" onclick="setCatFilter('${cid}')">${c.name}</button>`;
+      return `<button class="btn btn-sm" style="${act?`background:${color};color:#fff;`:`border:1px solid ${color};color:${color};background:transparent;`}" onclick="setCatFilter('${cid}')">${name}</button>`;
     }).join('')}`;
   if (catFilter) items=items.filter(i=>(i.category||'other')===catFilter);
   const sorted=[...items].sort((a,b)=>(b.date||'').localeCompare(a.date||''));
