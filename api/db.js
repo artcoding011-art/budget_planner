@@ -1,6 +1,6 @@
-import { sql } from '@vercel/postgres';
+const { sql } = require('@vercel/postgres');
 
-export default async function handler(request, response) {
+module.exports = async function handler(request, response) {
   try {
     // 1. 테이블이 없으면 생성
     await sql`
@@ -30,9 +30,11 @@ export default async function handler(request, response) {
         await sql`DELETE FROM kv_store WHERE key = ${key}`;
       } else {
         // 데이터 저장 또는 덮어쓰기 (Upsert)
+        // 객체인 경우 문자열(JSON)로 변환해 전달
+        const valStr = typeof value === 'object' ? JSON.stringify(value) : value;
         await sql`
           INSERT INTO kv_store (key, value)
-          VALUES (${key}, ${value})
+          VALUES (${key}, ${valStr}::jsonb)
           ON CONFLICT (key)
           DO UPDATE SET value = EXCLUDED.value;
         `;
@@ -47,3 +49,4 @@ export default async function handler(request, response) {
     return response.status(500).json({ error: error.message });
   }
 }
+
