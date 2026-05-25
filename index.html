@@ -790,6 +790,25 @@
   </div>
 </div>
 
+<!-- Modal: Fixed Override -->
+<div class="modal-overlay" id="fixedOverrideModal">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title">당월 고정지출 수정</div>
+      <button class="btn-icon" onclick="closeModal('fixedOverrideModal')">✕</button>
+    </div>
+    <div class="form-group">
+      <p style="font-size:14px; color:var(--text-sec); margin-bottom:12px;">이번 달에만 적용할 실제 고정지출 금액을 입력하세요. 빈칸으로 두면 기본 설정 금액이 적용됩니다.</p>
+      <div id="fixedOverrideList"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('fixedOverrideModal')">취소</button>
+      <button class="btn btn-primary" onclick="saveFixedOverrides()">저장</button>
+    </div>
+  </div>
+</div>
+
+
 <!-- Modal: Variable -->
 <div class="modal-overlay" id="variableModal">
   <div class="modal">
@@ -962,8 +981,14 @@ function genId() { return Date.now().toString(36)+Math.random().toString(36).sli
 /* ─────────── 집계 ─────────── */
 function calcSummary(uid) {
   const md  = getMonthData(uid);
-  const fx  = getFixed(uid);
+  const baseFx  = getFixed(uid);
   const set = getSettings(uid);
+  const overrides = md.fixedOverrides || {};
+  const fx = baseFx.map(f => ({
+    ...f,
+    amount: overrides[f.id] !== undefined ? overrides[f.id] : f.amount,
+    isOverridden: overrides[f.id] !== undefined
+  }));
   const inc = (md.income||[]).reduce((s,i)=>s+(i.amount||0),0);
   const fix = fx.reduce((s,f)=>s+(f.amount||0),0);
   const vr  = (md.variable||[]).reduce((s,v)=>s+(v.amount||0),0);
@@ -1280,6 +1305,8 @@ function renderEntryList(elId, items, withEdit=true, showDate=false, isFixed=fal
     const editBtns = (withEdit && !item.isFixedSum)
       ? `<button class="btn-icon" onclick="editVarEntry('${item.id}')" title="수정">✏️</button>
          <button class="btn-icon danger" onclick="deleteVarEntry('${item.id}')" title="삭제">🗑️</button>`
+      : (withEdit && item.isFixedSum)
+      ? `<button class="btn-icon" onclick="openFixedOverrideModal()" title="당월 금액 수정">✏️</button>`
       : '';
     const chip  = showDate && item.date ? `<span class="date-chip">${item.date.slice(5)}</span>` : '';
     const badge = isItemFixed ? `<span class="badge badge-fixed">고정</span>` : '';
@@ -1292,6 +1319,51 @@ function renderEntryList(elId, items, withEdit=true, showDate=false, isFixed=fal
       <div class="entry-actions">${editBtns}</div>
     </div>`;
   }).join('');
+}
+/* ─────────── 고정지출 당월 오버라이드 ─────────── */
+function openFixedOverrideModal() {
+  const md = getMonthData(activeUid);
+  const baseFx = getFixed(activeUid);
+  const overrides = md.fixedOverrides || {};
+  
+  const listEl = document.getElementById('fixedOverrideList');
+  if (baseFx.length === 0) {
+    listEl.innerHTML = '<p style="color:var(--text-sec);font-size:14px;text-align:center;">설정된 고정지출 항목이 없습니다.</p>';
+  } else {
+    listEl.innerHTML = baseFx.map(f => {
+      const val = overrides[f.id] !== undefined ? overrides[f.id] : '';
+      return `
+        <div style="display:flex; justify-content:space-between; align-items:center; padding:8px 0; border-bottom:1px solid var(--border);">
+          <div style="display:flex; align-items:center; gap:8px;">
+            <span class="entry-cat-dot" style="background:${f.color||'#c42b1c'}"></span>
+            <span style="font-weight:600">${f.name}</span>
+            <span style="font-size:12px; color:var(--text-sec)">(기본: ${fmt(f.amount)})</span>
+          </div>
+          <input type="number" class="form-input" style="width:120px;text-align:right;" id="fo_${f.id}" value="${val}" placeholder="미입력 시 기본값" />
+        </div>
+      `;
+    }).join('');
+  }
+  document.getElementById('fixedOverrideModal').style.display = 'flex';
+}
+
+function saveFixedOverrides() {
+  const md = getMonthData(activeUid);
+  const baseFx = getFixed(activeUid);
+  const newOverrides = {};
+  
+  baseFx.forEach(f => {
+    const el = document.getElementById(`fo_${f.id}`);
+    if (el && el.value !== '') {
+      newOverrides[f.id] = Number(el.value);
+    }
+  });
+  
+  md.fixedOverrides = newOverrides;
+  saveMonthData(activeUid, md);
+  closeModal('fixedOverrideModal');
+  renderDashboard();
+  renderOverview();
 }
 
 /* ─────────── Income View ─────────── */
