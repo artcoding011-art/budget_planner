@@ -1356,26 +1356,25 @@ function renderFixed() {
     el.innerHTML = items.map(item=>{
       const clr = item.color || '#c42b1c';
       const actualVal = overrides[item.id] !== undefined ? overrides[item.id] : '';
-      return `<div class="entry-item" style="flex-direction: column; align-items: stretch; gap: 8px;">
-        <div style="display:flex; justify-content:space-between; align-items:center;">
-          <div style="display:flex; align-items:center; gap:8px;">
-            <span class="entry-cat-dot" style="background:${clr}"></span>
-            <div class="entry-name">${item.name}${item.memo?`<div class="entry-sub">${item.memo}</div>`:''}</div>
+      return `<div class="entry-item">
+        <span class="entry-cat-dot" style="background:${clr}"></span>
+        <div class="entry-name" style="flex:1;">${item.name}${item.memo?`<div class="entry-sub">${item.memo}</div>`:''}</div>
+        
+        <div style="display:flex; align-items:center; gap:12px;">
+          <!-- 기본 설정액 (참고용) -->
+          <div style="text-align:right; color:var(--text-sec); display:flex; flex-direction:column; align-items:flex-end;">
+            <span style="font-size:10px; opacity:0.8;">기본설정</span>
+            <span style="font-size:12px; text-decoration: ${actualVal ? 'line-through' : 'none'};">${fmt(item.amount)}</span>
           </div>
-          <div style="display:flex; align-items:center; gap:8px;">
-            <div style="text-align:right;">
-              <span class="badge badge-fixed" style="margin:0; font-size:10px;">기본 설정액</span>
-              <div class="entry-amount negative" style="font-size:14px; margin-top:2px;">${fmt(item.amount)}</div>
-            </div>
-            <div class="entry-actions">
-              <button class="btn-icon" onclick="editFixed_('${item.id}')" title="설정 수정">⚙️</button>
-              <button class="btn-icon danger" onclick="deleteFixed_('${item.id}')" title="삭제">🗑️</button>
-            </div>
+
+          <!-- 당월 실제 지출액 (입력칸) -->
+          <input type="number" class="form-input" style="width:100px; text-align:right; font-weight:600; color:var(--danger); padding:4px 8px; font-size:14px; background:var(--bg-body);" placeholder="${fmt(item.amount)}" value="${actualVal}" onchange="saveSingleFixedOverride('${item.id}', this.value)" title="당월 실제 지출액" />
+
+          <!-- 액션 버튼 -->
+          <div class="entry-actions">
+            <button class="btn-icon" onclick="editFixed_('${item.id}')" title="설정 수정">⚙️</button>
+            <button class="btn-icon danger" onclick="deleteFixed_('${item.id}')" title="삭제">🗑️</button>
           </div>
-        </div>
-        <div style="display:flex; justify-content:space-between; align-items:center; background:var(--bg-body); padding:8px 12px; border-radius:8px;">
-          <span style="font-size:13px; font-weight:600; color:var(--text-main);">👉 당월 실제 지출액</span>
-          <input type="number" class="form-input" style="width:140px; text-align:right; font-weight:600; color:var(--danger); padding:4px 8px;" placeholder="기본 설정액 적용" value="${actualVal}" onchange="saveSingleFixedOverride('${item.id}', this.value)" />
         </div>
       </div>`;
     }).join('');
