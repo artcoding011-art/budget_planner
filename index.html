@@ -1018,7 +1018,18 @@ function calcOverview() {
 
 /* ─────────── 포매팅 ─────────── */
 function fmt(n)         { return '₩'+(Math.round(n||0)).toLocaleString('ko-KR'); }
-function mlStr(y,m)     { return `${y}년 ${m}월`; }
+function mlStr(y,m) {
+  let nextY = y;
+  let nextM = m + 1;
+  if (nextM > 12) {
+    nextM = 1;
+    nextY++;
+  }
+  if (y !== nextY) {
+    return `${y}년 ${m}월 21일 ~ ${nextY}년 ${nextM}월 20일`;
+  }
+  return `${y}년 ${m}월 21일 ~ ${nextM}월 20일`;
+}
 function catColor(id)   { return (getUserCatMap(activeUid)[id] || {color:'#7f8c8d'}).color; }
 function catName(id)    { return (getUserCatMap(activeUid)[id] || {name:'기타'}).name; }
 function todayStr()     { const d=new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; }
