@@ -875,8 +875,13 @@ function getUserCatMap(uid) {
 const USER_COLORS = ['#0078d4','#107c10','#c42b1c','#8e44ad','#e67e22','#16a085','#d35400','#2c3e50','#e91e63','#00796b'];
 
 /* ─────────── 상태 ─────────── */
-let curYear  = new Date().getFullYear();
-let curMonth = new Date().getMonth() + 1;
+const _initD = new Date();
+let curYear  = _initD.getFullYear();
+let curMonth = _initD.getMonth() + 1;
+if (_initD.getDate() < 21) {
+  curMonth--;
+  if (curMonth < 1) { curMonth = 12; curYear--; }
+}
 let activeUid   = '__overview__';
 let activeView  = 'overview';
 let editingId   = null;
