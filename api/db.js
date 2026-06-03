@@ -1,20 +1,27 @@
-const { sql } = require('@vercel/postgres');
+const { Client } = require('pg');
 
 module.exports = async function handler(request, response) {
+  const client = new Client({
+    connectionString: process.env.POSTGRES_URL,
+    ssl: { rejectUnauthorized: false }
+  });
+
   try {
+    await client.connect();
+
     // 1. 테이블이 없으면 생성
-    await sql`
+    await client.query(`
       CREATE TABLE IF NOT EXISTS kv_store (
         key VARCHAR(255) PRIMARY KEY,
         value JSONB NOT NULL
       )
-    `;
+    `);
 
     // 2. GET 요청: 모든 데이터 반환
     if (request.method === 'GET') {
-      const { rows } = await sql`SELECT * FROM kv_store`;
+      const res = await client.query('SELECT * FROM kv_store');
       const data = {};
-      rows.forEach(row => {
+      res.rows.forEach(row => {
         data[row.key] = row.value;
       });
       return response.status(200).json(data);
@@ -26,27 +33,24 @@ module.exports = async function handler(request, response) {
       if (!key) return response.status(400).json({ error: 'Key is required' });
       
       if (value === null) {
-        // value가 null이면 데이터 삭제 (초기화)
-        await sql`DELETE FROM kv_store WHERE key = ${key}`;
+        await client.query('DELETE FROM kv_store WHERE key = $1', [key]);
       } else {
-        // 데이터 저장 또는 덮어쓰기 (Upsert)
-        // 객체인 경우 문자열(JSON)로 변환해 전달
         const valStr = typeof value === 'object' ? JSON.stringify(value) : value;
-        await sql`
+        await client.query(`
           INSERT INTO kv_store (key, value)
-          VALUES (${key}, ${valStr}::jsonb)
+          VALUES ($1, $2::jsonb)
           ON CONFLICT (key)
           DO UPDATE SET value = EXCLUDED.value;
-        `;
+        `, [key, valStr]);
       }
       return response.status(200).json({ success: true });
     }
 
-    // 그 외의 HTTP 메서드 제한
     return response.status(405).json({ error: 'Method not allowed' });
   } catch (error) {
     console.error('Database Error:', error);
     return response.status(500).json({ error: error.message });
+  } finally {
+    try { await client.end(); } catch(e) {}
   }
 }
-
