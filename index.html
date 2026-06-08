@@ -334,7 +334,8 @@
     .modal-footer { display:flex; justify-content:flex-end; gap:8px; padding-top:4px; }
 
     /* ── Charts ── */
-    .chart-grid { display:grid; grid-template-columns:1fr 1fr; gap:16px; }
+    .chart-grid { display:flex; gap:16px; }
+    .chart-grid > .card { flex:1; min-width:240px; }
     .chart-wrap { display:flex; align-items:center; gap:20px; }
     canvas { flex-shrink:0; }
     .chart-legend { display:flex; flex-direction:column; gap:7px; flex:1; }
