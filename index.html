@@ -614,7 +614,10 @@
           <div class="page-title">고정 지출</div>
           <div class="page-subtitle">매달 자동으로 반영되는 고정 비용</div>
         </div>
-        <button class="btn btn-primary" id="btnAddFixed">＋ 항목 추가</button>
+        <div style="display:flex;gap:8px;">
+          <button class="btn btn-ghost" onclick="openManageCategories()">⚙️ 카테고리 관리</button>
+          <button class="btn btn-primary" id="btnAddFixed">＋ 항목 추가</button>
+        </div>
       </div>
       <div class="card"><div class="entry-list" id="fixedList"></div></div>
       <div class="card">
@@ -779,8 +782,8 @@
     <div class="form-group"><label class="form-label">항목명</label><input type="text" id="fixedNameInput" class="form-input" placeholder="예: 월세, 통신비, 보험료" /></div>
     <div class="form-group"><label class="form-label">금액 (원)</label><input type="number" id="fixedAmountInput" class="form-input" placeholder="0" step="1000" /></div>
     <div class="form-group">
-      <label class="form-label">분류 색상</label>
-      <div class="color-picker" id="fixedColorPicker"></div>
+      <label class="form-label">카테고리</label>
+      <select id="fixedCatInput" class="form-select"></select>
     </div>
     <div class="form-group"><label class="form-label">메모 (선택)</label><input type="text" id="fixedMemoInput" class="form-input" placeholder="메모를 입력하세요" /></div>
     <div class="modal-footer">
@@ -1369,7 +1372,33 @@ function saveSingleFixedOverride(id, valStr) {
   renderFixed();
 }
 
+function migrateFixedCategories(uid) {
+  const fixed = getFixed(uid);
+  let modified = false;
+  const set = getSettings(uid);
+  const custom = set.customCategories || [];
+
+  fixed.forEach(f => {
+    if (!f.category && f.color) {
+      let cat = custom.find(c => c.color === f.color);
+      if (!cat) {
+        cat = { id: genId(), name: `자동분류 카테고리 ${custom.length + 1}`, color: f.color };
+        custom.push(cat);
+      }
+      f.category = cat.id;
+      delete f.color;
+      modified = true;
+    }
+  });
+
+  if (modified) {
+    saveSettings_(uid, { customCategories: custom });
+    saveFixed_(uid, fixed);
+  }
+}
+
 function renderFixed() {
+  migrateFixedCategories(activeUid);
   const md = getMonthData(activeUid);
   const overrides = md.fixedOverrides || {};
   const items = getFixed(activeUid);
@@ -1377,31 +1406,47 @@ function renderFixed() {
   if (!items.length) {
     el.innerHTML=`<div class="empty-state"><div class="empty-icon">📌</div><p>등록된 고정지출이 없습니다</p></div>`;
   } else {
-    el.innerHTML = items.map(item=>{
-      const clr = item.color || '#c42b1c';
-      const actualVal = overrides[item.id] !== undefined ? overrides[item.id] : '';
-      return `<div class="entry-item">
-        <span class="entry-cat-dot" style="background:${clr}"></span>
-        <div class="entry-name" style="flex:1;">${item.name}${item.memo?`<div class="entry-sub">${item.memo}</div>`:''}</div>
-        
-        <div style="display:flex; align-items:center; gap:12px;">
-          <!-- 기본 설정액 (참고용) -->
-          <div style="text-align:right; color:var(--text-sec); display:flex; flex-direction:column; align-items:flex-end;">
-            <span style="font-size:10px; opacity:0.8;">기본설정</span>
-            <span style="font-size:12px; text-decoration: ${actualVal ? 'line-through' : 'none'};">${fmt(item.amount)}</span>
-          </div>
-
-          <!-- 당월 실제 지출액 (입력칸) -->
-          <input type="number" class="form-input" style="width:100px; text-align:right; font-weight:600; color:var(--danger); padding:4px 8px; font-size:14px; background:var(--bg-body);" placeholder="${fmt(item.amount)}" value="${actualVal}" onchange="saveSingleFixedOverride('${item.id}', this.value)" title="당월 실제 지출액" />
-
-          <!-- 액션 버튼 -->
-          <div class="entry-actions">
-            <button class="btn-icon" onclick="editFixed_('${item.id}')" title="설정 수정">⚙️</button>
-            <button class="btn-icon danger" onclick="deleteFixed_('${item.id}')" title="삭제">🗑️</button>
-          </div>
+    const cats = getUserCategories(activeUid);
+    const groups = {};
+    items.forEach(item => {
+      const catId = item.category || 'other';
+      if (!groups[catId]) groups[catId] = [];
+      groups[catId].push(item);
+    });
+    
+    let html = '';
+    Object.keys(groups).forEach(catId => {
+      const catObj = cats.find(c => c.id === catId) || { name: '기타', color: '#888' };
+      const groupItems = groups[catId].sort((a,b)=> b.amount - a.amount);
+      
+      html += `<div style="margin-bottom: 16px;">
+        <div style="display:flex; align-items:center; gap:6px; margin-bottom: 8px; font-size: 12px; font-weight: 600; color: var(--text-muted); padding-left: 4px;">
+          <span style="width: 10px; height: 10px; border-radius: 50%; background: ${catObj.color};"></span>
+          ${catObj.name}
         </div>
-      </div>`;
-    }).join('');
+        <div class="entry-list" style="gap: 4px;">`;
+      
+      html += groupItems.map(item=>{
+        const actualVal = overrides[item.id] !== undefined ? overrides[item.id] : '';
+        return `<div class="entry-item">
+          <div class="entry-name" style="flex:1;">${item.name}${item.memo?`<div class="entry-sub">${item.memo}</div>`:''}</div>
+          
+          <div style="display:flex; align-items:center; gap:12px;">
+            <div style="text-align:right; color:var(--text-sec); display:flex; flex-direction:column; align-items:flex-end;">
+              <span style="font-size:10px; opacity:0.8;">기본설정</span>
+              <span style="font-size:12px; text-decoration: ${actualVal ? 'line-through' : 'none'};">${fmt(item.amount)}</span>
+            </div>
+            <input type="number" class="form-input" style="width:100px; text-align:right; font-weight:600; color:var(--danger); padding:4px 8px; font-size:14px; background:var(--bg-body);" placeholder="${fmt(item.amount)}" value="${actualVal}" onchange="saveSingleFixedOverride('${item.id}', this.value)" title="당월 실제 지출액" />
+            <div class="entry-actions">
+              <button class="btn-icon" onclick="editFixed_('${item.id}')" title="설정 수정">⚙️</button>
+              <button class="btn-icon danger" onclick="deleteFixed_('${item.id}')" title="삭제">🗑️</button>
+            </div>
+          </div>
+        </div>`;
+      }).join('');
+      html += `</div></div>`;
+    });
+    el.innerHTML = html;
   }
   const actualTotal = items.reduce((s,f) => s + (overrides[f.id] !== undefined ? overrides[f.id] : (f.amount||0)), 0);
   document.getElementById('fixedTotalDisp').textContent = fmt(actualTotal);
@@ -1629,8 +1674,7 @@ function openAddFixed() {
   editingId=null;
   document.getElementById('fixedMTitle').textContent='고정지출 추가';
   ['fixedNameInput','fixedAmountInput','fixedMemoInput'].forEach(id=>document.getElementById(id).value='');
-  fixedSelColor = USER_COLORS[0];
-  renderFixedColorPicker();
+  populateCatSelect('fixedCatInput', 'family');
   openModal('fixedModal');
 }
 function editFixed_(id) {
@@ -1640,19 +1684,18 @@ function editFixed_(id) {
   document.getElementById('fixedNameInput').value=item.name;
   document.getElementById('fixedAmountInput').value=item.amount;
   document.getElementById('fixedMemoInput').value=item.memo||'';
-  fixedSelColor = item.color || USER_COLORS[0];
-  renderFixedColorPicker();
+  populateCatSelect('fixedCatInput', item.category || 'family');
   openModal('fixedModal');
 }
 function saveFixed() {
   const name=document.getElementById('fixedNameInput').value.trim();
   const amount=parseInt(document.getElementById('fixedAmountInput').value,10);
-  const color=fixedSelColor;
+  const category=document.getElementById('fixedCatInput').value;
   const memo=document.getElementById('fixedMemoInput').value.trim();
   if (!name||isNaN(amount)||amount<=0){showToast('항목명과 금액을 올바르게 입력해주세요');return;}
   let list=getFixed(activeUid);
-  if (editingId) list=list.map(f=>f.id===editingId?{...f,name,amount,color,memo}:f);
-  else list.push({id:genId(),name,amount,color,memo});
+  if (editingId) list=list.map(f=>f.id===editingId?{...f,name,amount,category,memo}:f);
+  else list.push({id:genId(),name,amount,category,memo});
   saveFixed_(activeUid,list);
   closeModal('fixedModal'); showToast(editingId?'수정되었습니다':'고정지출이 추가되었습니다'); renderAll();
 }
