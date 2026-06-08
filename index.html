@@ -1421,7 +1421,7 @@ function renderFixed() {
         const name = catName(cid);
         const color = catColor(cid);
         const act=fixedCatFilter===cid;
-        return \`<button class="btn btn-sm" style="${act?`background:${color};color:#fff;`:`border:1px solid ${color};color:${color};background:transparent;`}" onclick="setFixedCatFilter('${cid}')">${name}</button>\`;
+        return `<button class="btn btn-sm" style="${act?`background:${color};color:#fff;`:`border:1px solid ${color};color:${color};background:transparent;`}" onclick="setFixedCatFilter('${cid}')">${name}</button>`;
       }).join('')}`;
 
     if (fixedCatFilter) items=items.filter(i=>(i.category||'other')===fixedCatFilter);
