@@ -229,6 +229,11 @@
       border-color: rgba(196, 43, 28, 0.2);
       color: var(--danger);
     }
+    .savings-header-widget.current {
+      background: rgba(0, 120, 212, 0.06);
+      border-color: rgba(0, 120, 212, 0.2);
+      color: var(--primary);
+    }
     .sc-label { font-size: 11px; font-weight: 600; color: var(--text-muted); letter-spacing: 0.06em; text-transform: uppercase; }
     .sc-icon  { position:absolute; right:16px; top:14px; font-size:22px; opacity:0.18; }
     .sc-amount { font-size: 22px; font-weight: 700; margin: 6px 0 4px; letter-spacing:-0.02em; }
@@ -462,6 +467,11 @@
             <span class="widget-amount" id="ov-savings-val">₩0</span>
             <span class="widget-sub" id="ov-savings-sub-val">전체 예상 저축액</span>
           </div>
+          <div id="ovCurrentSavingsHeader" class="savings-header-widget current">
+            <span class="widget-label" style="color:var(--text-sec)">합산 현재 잔액</span>
+            <span class="widget-amount" id="ov-current-savings-val" style="color:var(--primary)">₩0</span>
+            <span class="widget-sub" id="ov-current-savings-sub-val">현재 지출 반영액</span>
+          </div>
         </div>
       </div>
       <div class="summary-grid">
@@ -537,6 +547,11 @@
             <span class="widget-label">예상 잔액</span>
             <span class="widget-amount" id="sc-savings-val">₩0</span>
             <span class="widget-sub" id="sc-savings-sub-val">이번 달 예상 저축액</span>
+          </div>
+          <div id="dashCurrentSavingsHeader" class="savings-header-widget current">
+            <span class="widget-label" style="color:var(--text-sec)">현재 잔액</span>
+            <span class="widget-amount" id="sc-current-savings-val" style="color:var(--primary)">₩0</span>
+            <span class="widget-sub" id="sc-current-savings-sub-val">현재 지출 반영액</span>
           </div>
         </div>
         <span class="progress-badge good" id="savingsBadge"></span>
@@ -640,10 +655,17 @@
         </div>
       </div>
       
-      <div class="card" style="background:var(--bg-active); border-color:var(--accent-light); padding:16px 20px;">
-        <div class="card-title" style="color:var(--accent); margin-bottom:6px;">💡 이번 달 예상 잔액</div>
-        <div style="font-size:26px;font-weight:700;" id="varExpectedDisp">₩0</div>
-        <div style="font-size:12px;color:var(--text-secondary);margin-top:2px;" id="varExpectedSub">목표치를 반영한 예상치입니다</div>
+      <div style="display:flex; gap:16px; flex-wrap:wrap; margin-bottom:16px;">
+        <div class="card" style="flex:1; background:var(--bg-active); border-color:var(--accent-light); padding:16px 20px; margin-bottom:0; min-width:260px;">
+          <div class="card-title" style="color:var(--accent); margin-bottom:6px;">💡 이번 달 예상 잔액</div>
+          <div style="font-size:26px;font-weight:700;" id="varExpectedDisp">₩0</div>
+          <div style="font-size:12px;color:var(--text-secondary);margin-top:2px;" id="varExpectedSub">목표치를 반영한 예상치입니다</div>
+        </div>
+        <div class="card" style="flex:1; background:rgba(0,120,212,0.05); border-color:rgba(0,120,212,0.2); padding:16px 20px; margin-bottom:0; min-width:260px;">
+          <div class="card-title" style="color:var(--primary); margin-bottom:6px;">💰 이번 달 현재 잔액</div>
+          <div style="font-size:26px;font-weight:700;color:var(--primary);" id="varCurrentDisp">₩0</div>
+          <div style="font-size:12px;color:var(--text-secondary);margin-top:2px;" id="varCurrentSub">현재까지 실 지출 반영치입니다</div>
+        </div>
       </div>
 
       <div style="display:flex;gap:6px;flex-wrap:wrap;" id="catFilterWrap"></div>
@@ -1160,6 +1182,8 @@ function renderOverview() {
     if (ovSavHeaderEl) ovSavHeaderEl.className = 'savings-header-widget';
     const ovSavSubEl = document.getElementById('ov-savings-sub-val');
     if (ovSavSubEl) ovSavSubEl.textContent = '전체 예상 저축액';
+    const ovCurSavEl = document.getElementById('ov-current-savings-val');
+    if (ovCurSavEl) ovCurSavEl.textContent = '₩0';
     document.getElementById('ov-living-pct').textContent='0%';
     document.getElementById('ov-allowance-pct').textContent='0%';
     document.getElementById('ov-living-bar').style.width='0%';
@@ -1188,6 +1212,7 @@ function renderOverview() {
   const ovSavHeaderEl = document.getElementById('ovSavingsHeader');
   const ovSavAmountEl = document.getElementById('ov-savings-val');
   const ovSavSubEl = document.getElementById('ov-savings-sub-val');
+  const ovCurSavEl = document.getElementById('ov-current-savings-val');
   if (ovSavAmountEl) {
     if (totExpectedSav < 0) {
       ovSavAmountEl.textContent = `-₩${Math.abs(Math.round(totExpectedSav)).toLocaleString('ko-KR')}`;
@@ -1198,6 +1223,9 @@ function renderOverview() {
       if (ovSavHeaderEl) ovSavHeaderEl.className = 'savings-header-widget plus';
       if (ovSavSubEl) ovSavSubEl.textContent = '전체 예상 저축액';
     }
+  }
+  if (ovCurSavEl) {
+    ovCurSavEl.textContent = (ov.totSav >= 0 ? '+' : '-') + '₩' + Math.abs(Math.round(ov.totSav)).toLocaleString('ko-KR');
   }
 
   document.getElementById('ov-income-sub').textContent   = `${users.length}명 합산`;
@@ -1281,6 +1309,7 @@ function renderDashboard() {
   const savHeaderEl = document.getElementById('dashSavingsHeader');
   const savAmountEl = document.getElementById('sc-savings-val');
   const savSubEl = document.getElementById('sc-savings-sub-val');
+  const curSavEl = document.getElementById('sc-current-savings-val');
   if (savAmountEl) {
     if (expectedSav < 0) {
       savAmountEl.textContent = `-₩${Math.abs(Math.round(expectedSav)).toLocaleString('ko-KR')}`;
@@ -1291,6 +1320,9 @@ function renderDashboard() {
       if (savHeaderEl) savHeaderEl.className = 'savings-header-widget plus';
       if (savSubEl) savSubEl.textContent = '목표 대비 예상 저축액';
     }
+  }
+  if (curSavEl) {
+    curSavEl.textContent = (s.sav >= 0 ? '+' : '-') + '₩' + Math.abs(Math.round(s.sav)).toLocaleString('ko-KR');
   }
 
   document.getElementById('sc-income-sub').textContent   = `수입 ${s.income.length}건`;
@@ -1488,6 +1520,13 @@ function renderVariable() {
   
   document.getElementById('varExpectedSub').textContent = 
     `수입 ${fmt(s.inc)} - (고정 ${fmt(s.fix)} + 생활비반영 ${fmt(expectedLiv)} + 용돈반영 ${fmt(expectedAll)} + 기타 ${fmt(otherVarSpent)})`;
+
+  const curDispEl = document.getElementById('varCurrentDisp');
+  if (curDispEl) {
+    curDispEl.textContent = (s.sav >= 0 ? '+' : '') + fmt(s.sav);
+    document.getElementById('varCurrentSub').textContent = 
+      `수입 ${fmt(s.inc)} - (고정 ${fmt(s.fix)} + 생활비 ${fmt(s.livSpent)} + 용돈 ${fmt(s.allSpent)} + 기타 ${fmt(otherVarSpent)})`;
+  }
 }
 
 function setCatFilter(cid) { catFilter=cid; renderVariable(); }
