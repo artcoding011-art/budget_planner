@@ -615,10 +615,11 @@
           <div class="page-subtitle">매달 자동으로 반영되는 고정 비용</div>
         </div>
         <div style="display:flex;gap:8px;">
-          <button class="btn btn-ghost" onclick="openManageCategories()">⚙️ 카테고리 관리</button>
+          <button class="btn btn-ghost" onclick="openManageCategories('fixed')">⚙️ 카테고리 관리</button>
           <button class="btn btn-primary" id="btnAddFixed">＋ 항목 추가</button>
         </div>
       </div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px;" id="fixedCatFilterWrap"></div>
       <div class="card"><div class="entry-list" id="fixedList"></div></div>
       <div class="card">
         <div class="card-title">월 고정지출 합계</div>
@@ -634,7 +635,7 @@
           <div class="page-subtitle" id="varSubtitle"></div>
         </div>
         <div style="display:flex;gap:8px;">
-          <button class="btn btn-ghost" id="btnAddCategory">⚙️ 카테고리 관리</button>
+          <button class="btn btn-ghost" id="btnAddCategory" onclick="openManageCategories('var')">⚙️ 카테고리 관리</button>
           <button class="btn btn-primary" id="btnAddVariable">＋ 지출 추가</button>
         </div>
       </div>
@@ -857,30 +858,60 @@ const DEFAULT_CATEGORIES = [
   { id:'allowance', name:'개인용돈',   color:'#9c27b0' },
 ];
 
-function getUserCategories(uid) {
+function runCategoryMigration(uid) {
+  if (!uid || uid === '__overview__') return;
+  const set = loadUD(uid).settings || {};
+  if (set.customCategories) {
+    const varCats = set.customCategories.filter(c => !c.name.includes('자동분류 카테고리'));
+    const fixedCats = set.customCategories.filter(c => c.name.includes('자동분류 카테고리'));
+    set.customVarCategories = varCats;
+    set.customFixedCategories = fixedCats;
+    delete set.customCategories;
+    saveSettings_(uid, set);
+  }
+}
+function getVarCategories(uid) {
   if (!uid || uid === '__overview__') {
     const users = getUsers();
     const allCustom = [];
     const seenIds = new Set();
     users.forEach(u => {
       const set = loadUD(u.uid).settings || {};
-      const custom = set.customCategories || [];
-      custom.forEach(c => {
-        if (!seenIds.has(c.id)) {
-          seenIds.add(c.id);
-          allCustom.push(c);
-        }
+      (set.customVarCategories || []).forEach(c => {
+        if (!seenIds.has(c.id)) { seenIds.add(c.id); allCustom.push(c); }
       });
     });
     return [...DEFAULT_CATEGORIES, ...allCustom, { id:'other', name:'기타', color:'#7f8c8d' }];
   }
+  runCategoryMigration(uid);
   const set = loadUD(uid).settings || {};
-  const custom = set.customCategories || [];
-  return [...DEFAULT_CATEGORIES, ...custom, { id:'other', name:'기타', color:'#7f8c8d' }];
+  return [...DEFAULT_CATEGORIES, ...(set.customVarCategories || []), { id:'other', name:'기타', color:'#7f8c8d' }];
 }
-
+function getFixedCategories(uid) {
+  if (!uid || uid === '__overview__') {
+    const users = getUsers();
+    const allCustom = [];
+    const seenIds = new Set();
+    users.forEach(u => {
+      const set = loadUD(u.uid).settings || {};
+      (set.customFixedCategories || []).forEach(c => {
+        if (!seenIds.has(c.id)) { seenIds.add(c.id); allCustom.push(c); }
+      });
+    });
+    return [...(allCustom), { id:'other', name:'기타', color:'#7f8c8d' }];
+  }
+  runCategoryMigration(uid);
+  const set = loadUD(uid).settings || {};
+  return [...(set.customFixedCategories || []), { id:'other', name:'기타', color:'#7f8c8d' }];
+}
+function getAllCategories(uid) {
+  const all = [...getVarCategories(uid), ...getFixedCategories(uid)];
+  const map = new Map();
+  all.forEach(c => map.set(c.id, c));
+  return Array.from(map.values());
+}
 function getUserCatMap(uid) {
-  return Object.fromEntries(getUserCategories(uid).map(c=>[c.id, c]));
+  return Object.fromEntries(getAllCategories(uid).map(c=>[c.id, c]));
 }
 
 const USER_COLORS = ['#0078d4','#107c10','#c42b1c','#8e44ad','#e67e22','#16a085','#d35400','#2c3e50','#e91e63','#00796b'];
@@ -897,6 +928,8 @@ let activeUid   = '__overview__';
 let activeView  = 'overview';
 let editingId   = null;
 let catFilter   = null;
+let fixedCatFilter = null;
+let categoryContext = 'var';
 let selColor    = USER_COLORS[0];
 let fixedSelColor = USER_COLORS[0];
 let dashVarViewMode = 'category';
@@ -1372,85 +1405,55 @@ function saveSingleFixedOverride(id, valStr) {
   renderFixed();
 }
 
-function migrateFixedCategories(uid) {
-  const fixed = getFixed(uid);
-  let modified = false;
-  const set = getSettings(uid);
-  const custom = set.customCategories || [];
-
-  fixed.forEach(f => {
-    if (!f.category && f.color) {
-      let cat = custom.find(c => c.color === f.color);
-      if (!cat) {
-        cat = { id: genId(), name: `자동분류 카테고리 ${custom.length + 1}`, color: f.color };
-        custom.push(cat);
-      }
-      f.category = cat.id;
-      delete f.color;
-      modified = true;
-    }
-  });
-
-  if (modified) {
-    saveSettings_(uid, { customCategories: custom });
-    saveFixed_(uid, fixed);
-  }
-}
-
 function renderFixed() {
-  migrateFixedCategories(activeUid);
   const md = getMonthData(activeUid);
   const overrides = md.fixedOverrides || {};
-  const items = getFixed(activeUid);
-  const el    = document.getElementById('fixedList');
+  let items = getFixed(activeUid);
+  const el = document.getElementById('fixedList');
   if (!items.length) {
     el.innerHTML=`<div class="empty-state"><div class="empty-icon">📌</div><p>등록된 고정지출이 없습니다</p></div>`;
+    document.getElementById('fixedCatFilterWrap').innerHTML = '';
   } else {
-    const cats = getUserCategories(activeUid);
-    const groups = {};
-    items.forEach(item => {
-      const catId = item.category || 'other';
-      if (!groups[catId]) groups[catId] = [];
-      groups[catId].push(item);
-    });
+    const usedCats = [...new Set(items.map(i=>i.category||'other'))];
+    document.getElementById('fixedCatFilterWrap').innerHTML = `
+      <button class="btn btn-sm ${fixedCatFilter===null?'btn-primary':'btn-ghost'}" onclick="setFixedCatFilter(null)">전체</button>
+      ${usedCats.map(cid=>{
+        const name = catName(cid);
+        const color = catColor(cid);
+        const act=fixedCatFilter===cid;
+        return \`<button class="btn btn-sm" style="${act?`background:${color};color:#fff;`:`border:1px solid ${color};color:${color};background:transparent;`}" onclick="setFixedCatFilter('${cid}')">${name}</button>\`;
+      }).join('')}`;
+
+    if (fixedCatFilter) items=items.filter(i=>(i.category||'other')===fixedCatFilter);
+    const sorted=[...items].sort((a,b)=>b.amount - a.amount);
     
-    let html = '';
-    Object.keys(groups).forEach(catId => {
-      const catObj = cats.find(c => c.id === catId) || { name: '기타', color: '#888' };
-      const groupItems = groups[catId].sort((a,b)=> b.amount - a.amount);
-      
-      html += `<div style="margin-bottom: 16px;">
-        <div style="display:flex; align-items:center; gap:6px; margin-bottom: 8px; font-size: 12px; font-weight: 600; color: var(--text-muted); padding-left: 4px;">
-          <span style="width: 10px; height: 10px; border-radius: 50%; background: ${catObj.color};"></span>
-          ${catObj.name}
-        </div>
-        <div class="entry-list" style="gap: 4px;">`;
-      
-      html += groupItems.map(item=>{
-        const actualVal = overrides[item.id] !== undefined ? overrides[item.id] : '';
-        return `<div class="entry-item">
-          <div class="entry-name" style="flex:1;">${item.name}${item.memo?`<div class="entry-sub">${item.memo}</div>`:''}</div>
-          
-          <div style="display:flex; align-items:center; gap:12px;">
-            <div style="text-align:right; color:var(--text-sec); display:flex; flex-direction:column; align-items:flex-end;">
-              <span style="font-size:10px; opacity:0.8;">기본설정</span>
-              <span style="font-size:12px; text-decoration: ${actualVal ? 'line-through' : 'none'};">${fmt(item.amount)}</span>
-            </div>
-            <input type="number" class="form-input" style="width:100px; text-align:right; font-weight:600; color:var(--danger); padding:4px 8px; font-size:14px; background:var(--bg-body);" placeholder="${fmt(item.amount)}" value="${actualVal}" onchange="saveSingleFixedOverride('${item.id}', this.value)" title="당월 실제 지출액" />
-            <div class="entry-actions">
-              <button class="btn-icon" onclick="editFixed_('${item.id}')" title="설정 수정">⚙️</button>
-              <button class="btn-icon danger" onclick="deleteFixed_('${item.id}')" title="삭제">🗑️</button>
-            </div>
+    el.innerHTML = sorted.map(item=>{
+      const actualVal = overrides[item.id] !== undefined ? overrides[item.id] : '';
+      const clr = catColor(item.category || 'other');
+      const cnam = catName(item.category || 'other');
+      return `<div class="entry-item">
+        <span class="entry-cat-dot" style="background:${clr}"></span>
+        <div class="entry-name" style="flex:1;">${item.name}${item.memo?`<div class="entry-sub">${item.memo}</div>`:cnam?`<div class="entry-sub">${cnam}</div>`:''}</div>
+        
+        <div style="display:flex; align-items:center; gap:12px;">
+          <div style="text-align:right; color:var(--text-sec); display:flex; flex-direction:column; align-items:flex-end;">
+            <span style="font-size:10px; opacity:0.8;">기본설정</span>
+            <span style="font-size:12px; text-decoration: ${actualVal ? 'line-through' : 'none'};">${fmt(item.amount)}</span>
           </div>
-        </div>`;
-      }).join('');
-      html += `</div></div>`;
-    });
-    el.innerHTML = html;
+          <input type="number" class="form-input" style="width:100px; text-align:right; font-weight:600; color:var(--danger); padding:4px 8px; font-size:14px; background:var(--bg-body);" placeholder="${fmt(item.amount)}" value="${actualVal}" onchange="saveSingleFixedOverride('${item.id}', this.value)" title="당월 실제 지출액" />
+          <div class="entry-actions">
+            <button class="btn-icon" onclick="editFixed_('${item.id}')" title="설정 수정">⚙️</button>
+            <button class="btn-icon danger" onclick="deleteFixed_('${item.id}')" title="삭제">🗑️</button>
+          </div>
+        </div>
+      </div>`;
+    }).join('');
   }
   const actualTotal = items.reduce((s,f) => s + (overrides[f.id] !== undefined ? overrides[f.id] : (f.amount||0)), 0);
   document.getElementById('fixedTotalDisp').textContent = fmt(actualTotal);
 }
+
+function setFixedCatFilter(cid) { fixedCatFilter=cid; renderFixed(); }
 
 /* ─────────── Variable View ─────────── */
 function renderVariable() {
@@ -1666,15 +1669,15 @@ function deleteIncome(id) {
 }
 
 /* ─────────── Fixed CRUD ─────────── */
-function populateCatSelect(selId, selectedId) {
-  const cats = getUserCategories(activeUid);
-  document.getElementById(selId).innerHTML=cats.map(c=>`<option value="${c.id}"${c.id===(selectedId||'family')?' selected':''}>${c.name}</option>`).join('');
+function populateCatSelect(selId, ctx, selectedId) {
+  const cats = ctx === 'var' ? getVarCategories(activeUid) : getFixedCategories(activeUid);
+  document.getElementById(selId).innerHTML=cats.map(c=>`<option value="${c.id}"${c.id===(selectedId||(cats[0]?cats[0].id:'other'))?' selected':''}>${c.name}</option>`).join('');
 }
 function openAddFixed() {
   editingId=null;
   document.getElementById('fixedMTitle').textContent='고정지출 추가';
   ['fixedNameInput','fixedAmountInput','fixedMemoInput'].forEach(id=>document.getElementById(id).value='');
-  populateCatSelect('fixedCatInput', 'family');
+  populateCatSelect('fixedCatInput', 'fixed', null);
   openModal('fixedModal');
 }
 function editFixed_(id) {
@@ -1684,7 +1687,7 @@ function editFixed_(id) {
   document.getElementById('fixedNameInput').value=item.name;
   document.getElementById('fixedAmountInput').value=item.amount;
   document.getElementById('fixedMemoInput').value=item.memo||'';
-  populateCatSelect('fixedCatInput', item.category || 'family');
+  populateCatSelect('fixedCatInput', 'fixed', item.category || null);
   openModal('fixedModal');
 }
 function saveFixed() {
@@ -1713,7 +1716,8 @@ function renderCatColorPicker() {
 }
 function selectCatColor(c) { catSelColor=c; renderCatColorPicker(); }
 
-function openManageCategories() {
+function openManageCategories(ctx) {
+  categoryContext = ctx;
   document.getElementById('catNameInput').value = '';
   catSelColor = USER_COLORS[0];
   renderCatColorPicker();
@@ -1723,10 +1727,11 @@ function openManageCategories() {
 
 function renderManageCategoryList() {
   const listEl = document.getElementById('catManageList');
-  const cats = getUserCategories(activeUid);
+  const cats = categoryContext === 'var' ? getVarCategories(activeUid) : getFixedCategories(activeUid);
   
   let html = '';
   cats.forEach(c => {
+    if (c.id === 'other') return;
     const isDefault = DEFAULT_CATEGORIES.some(dc => dc.id === c.id);
     html += `
       <div style="display:flex; align-items:center; justify-content:space-between; padding: 8px 12px; border: 1px solid var(--border); border-radius: var(--radius-sm); margin-bottom: 6px;">
@@ -1736,7 +1741,10 @@ function renderManageCategoryList() {
         </div>
         ${isDefault ? 
           `<span style="font-size: 11px; color: var(--text-muted); background: var(--bg-hover); padding: 2px 6px; border-radius: 4px;">기본</span>` : 
-          `<button class="btn-icon danger" style="padding: 4px;" onclick="deleteCustomCategory('${c.id}')" title="삭제">🗑️</button>`
+          `<div style="display:flex; gap: 4px;">
+             <button class="btn-icon" style="padding: 4px;" onclick="editCustomCategory('${c.id}', '${c.name.replace(/'/g,"\\'")}')" title="수정">✏️</button>
+             <button class="btn-icon danger" style="padding: 4px;" onclick="deleteCustomCategory('${c.id}')" title="삭제">🗑️</button>
+           </div>`
         }
       </div>
     `;
@@ -1744,12 +1752,31 @@ function renderManageCategoryList() {
   listEl.innerHTML = html;
 }
 
-function deleteCustomCategory(id) {
-  if(!confirm('이 카테고리를 삭제하시겠습니까?\n(기존에 작성된 지출 내역의 데이터는 유지됩니다)')) return;
+function editCustomCategory(id, currentName) {
+  const newName = prompt('카테고리 이름을 수정하세요:', currentName);
+  if (!newName || newName.trim() === '' || newName.trim() === currentName) return;
+  
   const set = getSettings(activeUid);
-  const custom = set.customCategories || [];
+  const targetArrayName = categoryContext === 'var' ? 'customVarCategories' : 'customFixedCategories';
+  const custom = set[targetArrayName] || [];
+  
+  const cat = custom.find(c => c.id === id);
+  if (cat) {
+    cat.name = newName.trim();
+    saveSettings_(activeUid, { [targetArrayName]: custom });
+    showToast('카테고리 이름이 수정되었습니다.');
+    renderManageCategoryList();
+    renderAll();
+  }
+}
+
+function deleteCustomCategory(id) {
+  if(!confirm('이 카테고리를 삭제하시겠습니까?\\n(기존에 작성된 지출 내역의 데이터는 유지됩니다)')) return;
+  const set = getSettings(activeUid);
+  const targetArrayName = categoryContext === 'var' ? 'customVarCategories' : 'customFixedCategories';
+  const custom = set[targetArrayName] || [];
   const updated = custom.filter(c => c.id !== id);
-  saveSettings_(activeUid, { customCategories: updated });
+  saveSettings_(activeUid, { [targetArrayName]: updated });
   showToast('카테고리가 삭제되었습니다.');
   renderManageCategoryList();
   renderAll();
@@ -1759,9 +1786,10 @@ function saveCustomCategory() {
   const name = document.getElementById('catNameInput').value.trim();
   if(!name) return showToast('카테고리 이름을 입력하세요.');
   const set = getSettings(activeUid);
-  const custom = set.customCategories || [];
+  const targetArrayName = categoryContext === 'var' ? 'customVarCategories' : 'customFixedCategories';
+  const custom = set[targetArrayName] || [];
   custom.push({ id: genId(), name, color: catSelColor });
-  saveSettings_(activeUid, { customCategories: custom });
+  saveSettings_(activeUid, { [targetArrayName]: custom });
   showToast('카테고리가 추가되었습니다.');
   
   // 폼 초기화 및 목록 갱신
@@ -1776,7 +1804,7 @@ function openAddVariable() {
   document.getElementById('varMTitle').textContent='지출 추가';
   ['varNameInput','varAmountInput','varMemoInput'].forEach(id=>document.getElementById(id).value='');
   document.getElementById('varDateInput').value=todayStr();
-  populateCatSelect('varCatInput','family');
+  populateCatSelect('varCatInput', 'var', null);
   openModal('variableModal');
 }
 function editVarEntry(id) {
@@ -1787,7 +1815,7 @@ function editVarEntry(id) {
   document.getElementById('varAmountInput').value=item.amount;
   document.getElementById('varMemoInput').value=item.memo||'';
   document.getElementById('varDateInput').value=item.date||todayStr();
-  populateCatSelect('varCatInput',item.category||'other');
+  populateCatSelect('varCatInput', 'var', item.category||'other');
   openModal('variableModal');
 }
 function saveVariable() {
@@ -1866,7 +1894,7 @@ document.getElementById('btnExportCSV').addEventListener('click',exportCSV);
 document.getElementById('btnAddIncome').addEventListener('click',openAddIncome);
 document.getElementById('btnAddFixed').addEventListener('click',openAddFixed);
 document.getElementById('btnAddVariable').addEventListener('click',openAddVariable);
-document.getElementById('btnAddCategory').addEventListener('click',openManageCategories);
+
 document.querySelectorAll('.nav-item[data-view]').forEach(btn=>btn.addEventListener('click',()=>navigate(btn.dataset.view)));
 
 // Enter 키
