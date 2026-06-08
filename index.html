@@ -521,10 +521,17 @@
           </div>
         </div>
         <div class="card">
+          <div class="card-title">전체 지출 유형</div>
+          <div class="chart-wrap" style="margin-top:8px;">
+            <canvas id="ovTypePieChart" width="150" height="150"></canvas>
+            <div class="chart-legend" id="ovTypePieLegend"></div>
+          </div>
+        </div>
+        <div class="card">
           <div class="card-title">전체 카테고리별 지출</div>
           <div class="chart-wrap" style="margin-top:8px;">
-            <canvas id="ovPieChart" width="150" height="150"></canvas>
-            <div class="chart-legend" id="ovPieLegend"></div>
+            <canvas id="ovCatPieChart" width="150" height="150"></canvas>
+            <div class="chart-legend" id="ovCatPieLegend"></div>
           </div>
         </div>
       </div>
@@ -1190,8 +1197,10 @@ function renderOverview() {
         <p style="font-size:13px;">상단 탭의 <b>＋ 사용자 추가</b>를 눌러 시작하세요</p>
       </div>`;
     document.getElementById('ovCmpChart').innerHTML='';
-    drawPie('ovPieChart',[]);
-    document.getElementById('ovPieLegend').innerHTML='';
+    drawPie('ovTypePieChart',[]);
+    document.getElementById('ovTypePieLegend').innerHTML='';
+    drawPie('ovCatPieChart',[]);
+    document.getElementById('ovCatPieLegend').innerHTML='';
     return;
   }
 
@@ -1272,21 +1281,49 @@ function renderOverview() {
       </div>`;
   }).join('');
 
-  const catTotals = {};
-  ov.perUser.forEach(({s}) => {
+  const typeEntries = [
+    { label: '고정지출', value: ov.totFix, color: '#c42b1c' },
+    { label: '변동지출', value: ov.totVr, color: '#9d5d00' }
+  ].filter(e => e.value > 0);
+  const totTypeExp = ov.totFix + ov.totVr;
+  drawPie('ovTypePieChart', typeEntries);
+  document.getElementById('ovTypePieLegend').innerHTML = typeEntries.map(e => `
+    <div class="legend-item">
+      <span class="legend-dot" style="background:${e.color}"></span>
+      <span class="legend-name">${e.label}</span>
+      <span class="legend-val">${totTypeExp>0?Math.round(e.value/totTypeExp*100):0}%</span>
+    </div>`).join('') || '<div style="color:var(--text-muted);font-size:12px;">데이터 없음</div>';
+
+  const catNameTotals = {};
+  ov.perUser.forEach(({user, s}) => {
+    const uVars = getVarCategories(user.id);
+    const uFixs = getFixedCategories(user.id);
+    const getCName = (cid) => {
+      const vCat = uVars.find(c => c.id === cid); if (vCat) return vCat.name;
+      const fCat = uFixs.find(c => c.id === cid); if (fCat) return fCat.name;
+      return '기타';
+    };
+    const getCColor = (cid) => {
+      const vCat = uVars.find(c => c.id === cid); if (vCat) return vCat.color;
+      const fCat = uFixs.find(c => c.id === cid); if (fCat) return fCat.color;
+      return '#7f8c8d';
+    };
     [...s.variable,...s.fixed].forEach(item=>{
-      const cid=item.category||'other';
-      catTotals[cid]=(catTotals[cid]||0)+item.amount;
+      const cid = item.category || 'other';
+      const cname = getCName(cid);
+      const ccolor = getCColor(cid);
+      if (!catNameTotals[cname]) catNameTotals[cname] = { value: 0, color: ccolor };
+      catNameTotals[cname].value += item.amount;
     });
   });
-  const catEntries = Object.entries(catTotals).sort((a,b)=>b[1]-a[1]);
-  const totExp = catEntries.reduce((s,[,v])=>s+v,0);
-  drawPie('ovPieChart', catEntries.map(([cid,val])=>({label:catName(cid),value:val,color:catColor(cid)})));
-  document.getElementById('ovPieLegend').innerHTML = catEntries.slice(0,7).map(([cid,val])=>`
+  const catEntries = Object.entries(catNameTotals).sort((a,b)=>b[1].value - a[1].value);
+  const totCatExp = catEntries.reduce((sum, [, data]) => sum + data.value, 0);
+  drawPie('ovCatPieChart', catEntries.map(([name, data]) => ({label: name, value: data.value, color: data.color})));
+  document.getElementById('ovCatPieLegend').innerHTML = catEntries.slice(0,7).map(([name, data]) => `
     <div class="legend-item">
-      <span class="legend-dot" style="background:${catColor(cid)}"></span>
-      <span class="legend-name">${catName(cid)}</span>
-      <span class="legend-val">${totExp>0?Math.round(val/totExp*100):0}%</span>
+      <span class="legend-dot" style="background:${data.color}"></span>
+      <span class="legend-name">${name}</span>
+      <span class="legend-val">${totCatExp>0?Math.round(data.value/totCatExp*100):0}%</span>
     </div>`).join('') || '<div style="color:var(--text-muted);font-size:12px;">데이터 없음</div>';
 }
 
